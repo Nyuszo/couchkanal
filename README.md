@@ -4,6 +4,15 @@ Das iPad wird zum Fernseher, das Handy zur Fernbedienung. YouTube-Videos laufen
 auf dem iPad (per HDMI am Fernseher), gesteuert vom Handy: suchen, Warteschlange,
 Play, Pause, springen.
 
+## Live-Adresse
+
+- Fernseher (iPad): https://nyuszo.github.io/couchkanal/tv.html
+- Fernbedienung (Handy): https://nyuszo.github.io/couchkanal/remote.html
+- Startseite mit Auswahl: https://nyuszo.github.io/couchkanal/
+
+Gehostet über GitHub Pages aus diesem Repository. Jede Änderung auf `main` ist
+nach etwa einer Minute live.
+
 ## Wie es funktioniert
 
 - `tv.html` läuft auf dem iPad. Nach einem Tipp zeigt es einen vierstelligen Code.
