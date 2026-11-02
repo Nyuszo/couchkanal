@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Couchkanal</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Couchkanal">
+<meta name="theme-color" content="#0d1322">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="tv.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6h2v12h-2z"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M12 5V2L7 7l5 5V8c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></symbol>
+  <symbol id="i-fwd" viewBox="0 0 24 24"><path d="M12 5V2l5 5-5 5V8c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/></symbol>
+  <symbol id="i-vol" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><path d="M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.8 8.8 0 0 0 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 0 0 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"/></symbol>
+  <symbol id="i-touch" viewBox="0 0 24 24"><path d="M9 11.24V7.5a2.5 2.5 0 0 1 5 0v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74zm9.84 4.63-4.54-2.26c-.17-.07-.35-.11-.54-.11H13v-6c0-.83-.67-1.5-1.5-1.5S10 6.67 10 7.5v10.74l-3.43-.72c-.08-.01-.15-.03-.24-.03-.31 0-.59.13-.79.33l-.79.8 4.94 4.94c.27.27.65.44 1.06.44h6.79c.75 0 1.33-.55 1.44-1.28l.75-5.27c.01-.07.02-.14.02-.2 0-.62-.38-1.16-.91-1.38z"/></symbol>
+</svg>
+
+<main id="tv" data-state="boot">
+  <div class="ambient" aria-hidden="true">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+    <img class="ambient-art" id="ambientArt" alt="">
+  </div>
+
+  <section class="screen boot" id="boot">
+    <span class="brand"><span class="brand-dot"></span>Couchkanal</span>
+    <div class="boot-center">
+      <div class="touch-ring"><svg class="icon"><use href="#i-touch"/></svg></div>
+      <h1>Einmal tippen, dann übernimmt das Handy</h1>
+      <p>Der Fernseher startet und zeigt dir den Kopplungscode.</p>
+    </div>
+  </section>
+
+  <section class="screen idle" id="idle">
+    <span class="brand"><span class="brand-dot"></span>Couchkanal</span>
+    <div class="clock" id="clock">--:--</div>
+    <div class="idle-body">
+      <p class="idle-lead" id="idleLead">Öffne die Fernbedienung am Handy und gib diesen Code ein</p>
+      <div class="code" id="code" aria-label="Kopplungscode"></div>
+      <p class="idle-hint" id="idleHint">Die Fernbedienung liegt unter derselben Adresse wie diese Seite.</p>
+    </div>
+  </section>
+
+  <section class="screen stage" id="stage">
+    <div id="player"></div>
+    <div class="tap-to-play" id="tapToPlay" hidden>
+      <div class="touch-ring small"><svg class="icon"><use href="#i-touch"/></svg></div>
+      <h2>Einmal tippen, dann geht es los</h2>
+      <p id="tapTitle"></p>
+    </div>
+  </section>
+
+  <div class="status wait" id="status"><span class="dot"></span><span id="statusText">Verbinde mit dem Vermittler</span></div>
+
+  <div class="now" id="now">
+    <img class="now-thumb" id="nowThumb" alt="">
+    <div class="now-text">
+      <p class="now-channel" id="nowChannel"></p>
+      <h2 class="now-title" id="nowTitle"></h2>
+      <div class="now-progress"><div class="now-fill" id="nowFill"></div></div>
+      <p class="now-times"><span id="nowPos">0:00</span><span id="nowDur">0:00</span></p>
+    </div>
+    <div class="now-next" id="nowNext" hidden><span>Danach</span><strong id="nowNextTitle"></strong></div>
+  </div>
+
+  <div class="osd osd-center" id="osdCenter"><svg class="icon"><use id="osdCenterIcon" href="#i-play"/></svg><span id="osdCenterLabel"></span></div>
+  <div class="osd osd-volume" id="osdVolume">
+    <svg class="icon"><use id="osdVolIcon" href="#i-vol"/></svg>
+    <div class="vol-track"><div class="vol-fill" id="osdVolFill"></div></div>
+    <span id="osdVolLabel">100</span>
+  </div>
+
+  <aside class="queue-panel" id="queuePanel" aria-label="Warteschlange">
+    <h2>Warteschlange</h2>
+    <ul id="queueList"></ul>
+  </aside>
+
+  <div class="toast" id="toast" role="status"></div>
+</main>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script type="module" src="tv.js"></script>
+</body>
+</html>
