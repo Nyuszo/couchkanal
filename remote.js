@@ -1,4 +1,4 @@
-import { isValidCode, peerIdFor, parseYouTubeInput, thumbFor, formatTime, APPS, STATIONS, stationById, normalizeWebUrl } from './logic.js';
+import { isValidCode, peerIdFor, parseYouTubeInput, thumbFor, formatTime, APPS, STATIONS, stationById, normalizeWebUrl, loadFirst, PEER_URLS } from './logic.js?v=202611032107';
 
 const $ = (s) => document.querySelector(s);
 const root = $('#remote');
@@ -51,10 +51,15 @@ function send(msg) { if (conn && conn.open) { try { conn.send(msg); return true;
 function cmd(c, extra = {}) { buzz(); if (!send({ t: 'cmd', cmd: c, ...extra })) toast('Nicht verbunden'); }
 
 // ---- connection ----------------------------------------------------------------
-function connect(c) {
+async function connect(c) {
   code = c; wantConnected = true;
   el.pairError.hidden = true;
   setConn('busy', 'Verbinde'); el.pairBtn.disabled = true;
+  if (typeof window.Peer !== 'function') {
+    try { await loadFirst(PEER_URLS, () => typeof window.Peer === 'function'); }
+    catch (e) { wantConnected = false; fail('Der Verbindungs-Baustein konnte nicht geladen werden. Internet prüfen, Inhaltsblocker für diese Seite ausschalten.'); return; }
+    if (!wantConnected) return;
+  }
   if (!peer || peer.destroyed) {
     peer = new Peer({ debug: 0 });
     peer.on('open', dial);

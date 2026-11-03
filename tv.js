@@ -2,8 +2,8 @@ import {
   makeCode, isValidCode, peerIdFor, formatTime,
   reduce, initialQueue, sanitizeVideo,
   APPS, applyAppConfig, visibleApps, moveFocus, STATIONS, stationById, YT_ROWS, thumbFor, launchTarget,
-  normalizeWebUrl, hostLabel, rememberSite,
-} from './logic.js';
+  normalizeWebUrl, hostLabel, rememberSite, loadFirst, PEER_URLS, QR_URLS,
+} from './logic.js?v=202611032107';
 
 const $ = (sel) => document.querySelector(sel);
 const tv = $('#tv');
@@ -210,8 +210,13 @@ function renderCode(c, confirmed) {
     el.code.appendChild(s);
   });
 }
+let qrLoading = null;
 function renderQR() {
-  if (!code || typeof qrcode !== 'function') return;
+  if (!code) return;
+  if (typeof qrcode !== 'function') {
+    qrLoading = qrLoading || loadFirst(QR_URLS, () => typeof qrcode === 'function').then(() => renderQR()).catch(() => { el.qr.textContent = ''; });
+    return;
+  }
   try {
     const url = new URL('remote.html', location.href); url.searchParams.set('code', code);
     const q2 = qrcode(0, 'M'); q2.addData(url.href); q2.make();
@@ -983,5 +988,9 @@ setInterval(() => {
 tickClock(); setInterval(tickClock, 10_000);
 renderCode('····', false);
 renderHome();
-startPeer();
+setStatus('wait', 'Lade Verbindungs-Baustein');
+loadFirst(PEER_URLS, () => typeof window.Peer === 'function').then(startPeer).catch((e) => {
+  setStatus('warn', 'Verbindungs-Baustein nicht geladen. Internet? Inhaltsblocker?');
+  if (window.__ckDiag) window.__ckDiag('Der Verbindungs-Baustein (PeerJS) kam weder von jsdelivr noch von unpkg. Internet prüfen, Inhaltsblocker für diese Seite ausschalten. ' + e.message);
+});
 window.__couchkanalReady = true;

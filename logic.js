@@ -275,3 +275,27 @@ export function rememberSite(list, url, max = 12) {
   const rest = (Array.isArray(list) ? list : []).filter((e) => e && e.url !== clean);
   return [{ url: clean, host: hostLabel(clean) }, ...rest].slice(0, max);
 }
+
+// ---- Script loading with a time limit and a fallback source ------------------
+// The connection library used to be a blocking <script> tag; if its CDN stalled, the
+// whole page stalled before the start tap could work. Now the page starts first and
+// fetches the libraries afterwards, trying a second source when the first fails.
+export function loadScript(url, timeout = 9000) {
+  return new Promise((resolve, reject) => {
+    if (typeof document === 'undefined') return reject(new Error('no document'));
+    const s = document.createElement('script'); s.src = url; s.async = true;
+    const t = setTimeout(() => { s.remove(); reject(new Error('timeout ' + url)); }, timeout);
+    s.onload = () => { clearTimeout(t); resolve(url); };
+    s.onerror = () => { clearTimeout(t); s.remove(); reject(new Error('failed ' + url)); };
+    document.head.appendChild(s);
+  });
+}
+export async function loadFirst(urls, isReady) {
+  const errors = [];
+  for (const u of urls) {
+    try { await loadScript(u); if (isReady()) return u; } catch (e) { errors.push(e.message); }
+  }
+  throw new Error(errors.join('; ') || 'nothing loaded');
+}
+export const PEER_URLS = ['https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js', 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'];
+export const QR_URLS = ['https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js', 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js'];

@@ -11,8 +11,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Instrument+Sans:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="common.css">
-<link rel="stylesheet" href="tv.css">
+<link rel="stylesheet" href="common.css?v=202611032107">
+<link rel="stylesheet" href="tv.css?v=202611032107">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -166,6 +166,7 @@
 (function () {
   var shown = false;
   function show(msg) { var b = document.getElementById('bootDiag'); if (!b) return; b.hidden = false; b.textContent = msg; shown = true; }
+  window.__ckDiag = show;
   var ua = navigator.userAgent, m = ua.match(/OS (\d+)_(\d+)/) || ua.match(/Version\/(\d+)\.(\d+)/);
   var ver = m ? m[1] + '.' + m[2] : '';
   window.addEventListener('error', function (e) { show('Fehler: ' + (e.message || 'unbekannt') + (ver ? ' · System ' + ver : '')); });
@@ -175,8 +176,6 @@
   }, 4000);
 })();
 </script>
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
-<script type="module" src="tv.js"></script>
+<script type="module" src="tv.js?v=202611032107"></script>
 </body>
 </html>
