@@ -467,3 +467,5 @@ html, body { overflow: hidden; }
 .ambient-art { filter: blur(34px) saturate(1.25); }
 #tv.has-art[data-state="home"] .ambient-art { opacity: 0.13; }
 .tw-chip.off .live-dot { background: var(--paper-faint); box-shadow: none; }
+/* on the home screen the status pill lives under the clock, clear of the shelf text */
+#tv[data-state="home"] .status { left: auto; right: 6vw; top: calc(6vh + 5.4em); bottom: auto; }
