@@ -89,8 +89,13 @@
       <input type="range" id="volume" min="0" max="100" value="100" aria-label="Lautstärke">
     </div>
 
-    <!-- home: the dial -->
+    <!-- home: what plays, then the dial -->
     <section class="panel" id="panelHome">
+      <button class="now-mini" id="nowMini" hidden>
+        <span class="mini-art" id="miniArt"><img id="miniImg" alt=""><span class="mini-word" id="miniWord"></span></span>
+        <span class="mini-text"><span class="mini-kicker" id="miniKicker">Läuft gerade</span><span class="mini-title" id="miniTitle"></span></span>
+        <span class="mini-play" id="miniPlay"><svg class="icon"><use id="miniPlayIcon" href="#i-pause"/></svg></span>
+      </button>
       <div class="dial" id="dial">
         <button class="dial-btn up" data-dir="up" aria-label="Hoch"><svg class="icon"><use href="#i-up"/></svg></button>
         <button class="dial-btn left" data-dir="left" aria-label="Links"><svg class="icon"><use href="#i-left"/></svg></button>

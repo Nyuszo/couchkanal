@@ -10,6 +10,7 @@ const el = {
   sysToggleIcon: $('#sysToggleIcon'), sysToggleLabel: $('#sysToggleLabel'), muteBtn: $('#muteBtn'), muteIcon: $('#muteIcon'), muteLabel: $('#muteLabel'),
   volumeRow: $('#volumeRow'), volume: $('#volume'),
   panels: { home: $('#panelHome'), youtube: $('#panelYoutube'), twitch: $('#panelTwitch'), radio: $('#panelRadio'), clock: $('#panelClock') },
+  nowMini: $('#nowMini'), miniArt: $('#miniArt'), miniImg: $('#miniImg'), miniWord: $('#miniWord'), miniKicker: $('#miniKicker'), miniTitle: $('#miniTitle'), miniPlay: $('#miniPlay'), miniPlayIcon: $('#miniPlayIcon'),
   ytDial: $('#ytDial'), ytBrowseHint: $('#ytBrowseHint'), scrubWrap: document.querySelector('#panelYoutube .scrub'), transport: document.querySelector('#panelYoutube .transport'), addLauncher: $('#addLauncher'),
   hero: $('#hero'), nowCard: $('#nowCard'), nowGlow: $('#nowGlow'), nowThumb: $('#nowThumb'), nowTitle: $('#nowTitle'), nowChannel: $('#nowChannel'), emptyTitle: $('#emptyTitle'), emptyText: $('#emptyText'),
   scrub: $('#scrub'), tPos: $('#tPos'), tDur: $('#tDur'),
@@ -170,7 +171,24 @@ function render() {
   renderYoutube(playing);
   renderTwitch();
   renderRadio();
+  renderMini(playing);
   renderTimes();
+}
+function renderMini(playing) {
+  const m = tv.media;
+  el.nowMini.hidden = m === 'none';
+  if (m === 'none') return;
+  let title = '', img = '', word = '', hue = null;
+  if (m === 'youtube') { const v = currentVideo(); title = v ? v.title : ''; img = v ? v.thumb : ''; }
+  if (m === 'twitch') { title = `Twitch: ${tv.twitch?.channel || ''}`; img = tv.twitch?.channel ? `https://static-cdn.jtvnw.net/previews-ttv/live_user_${tv.twitch.channel}-320x180.jpg?t=${Math.floor(Date.now() / 60000)}` : ''; }
+  if (m === 'radio') { const st = tv.radio?.station ? stationById(tv.radio.station) : null; title = st ? st.name : ''; word = st ? st.name.slice(0, 3) : ''; hue = st ? st.hue : 36; }
+  el.miniTitle.textContent = title;
+  el.miniKicker.textContent = playing ? 'Läuft gerade' : 'Pausiert';
+  if (img) { if (el.miniImg.getAttribute('src') !== img) el.miniImg.src = img; el.miniImg.hidden = false; el.miniWord.hidden = true; }
+  else { el.miniImg.hidden = true; el.miniWord.hidden = false; el.miniWord.textContent = word; }
+  el.miniArt.style.setProperty('--hue', hue == null ? 36 : hue);
+  el.miniArt.classList.toggle('word', !img);
+  el.miniPlayIcon.setAttribute('href', playing ? '#i-pause' : '#i-play');
 }
 function renderStrip(app) {
   const items = [{ id: 'home', name: 'Start' }, ...(tv.apps || APPS).filter((a) => !a.hidden)];
@@ -500,6 +518,8 @@ document.querySelectorAll('[data-cmd]').forEach((b) => {
   });
 });
 document.querySelectorAll('.dial-btn').forEach((b) => b.addEventListener('click', () => cmd('nav', { dir: b.dataset.dir })));
+el.nowMini.addEventListener('click', () => { if (tv && tv.media !== 'none') cmd('open', { app: tv.media }); });
+el.miniPlay.addEventListener('click', (e) => { e.stopPropagation(); cmd('toggle'); });
 document.querySelectorAll('.dial-ok').forEach((b) => b.addEventListener('click', () => cmd('select')));
 document.addEventListener('keydown', (e) => {
   if (root.dataset.view !== 'control' || e.target.matches('input, textarea')) return;

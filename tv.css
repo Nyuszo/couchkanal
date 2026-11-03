@@ -523,3 +523,23 @@ html, body { overflow: hidden; }
 #tv.browsing .now { display: none; }
 .app-tile[data-app="ard"] .wordmark { font-size: 1.6vw; }
 .app-tile[data-app="joyn"] .wordmark, .app-tile[data-app="zdf"] .wordmark { letter-spacing: -0.02em; }
+
+/* =====================================================================
+   Glint on focus, skeleton cards while rows load
+   ===================================================================== */
+.app-tile::before, .station::before, .yt-card .th::before {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,.32) 50%, transparent 65%);
+  transform: translateX(-130%);
+}
+.app-tile.glint::before, .station.glint::before, .yt-card.glint .th::before { animation: glint .9s var(--ease-out) .05s both; }
+@keyframes glint { to { transform: translateX(130%); } }
+.station { overflow: hidden; }
+.yt-card .th { overflow: hidden; }
+.yt-card.skel { pointer-events: none; }
+.yt-card.skel .th, .yt-card.skel .t, .yt-card.skel .c {
+  background: linear-gradient(90deg, var(--night-2) 20%, var(--night-3) 50%, var(--night-2) 80%);
+  background-size: 200% 100%; animation: shimmer 1.4s linear infinite; border-radius: .5vw;
+}
+.yt-card.skel .t { height: 1.1vw; width: 85%; } .yt-card.skel .c { height: .9vw; width: 50%; }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }

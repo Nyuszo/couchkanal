@@ -214,7 +214,7 @@ function mediaLabel() {
   if (media === 'radio' && radio.station) return radio.station.name;
   return '';
 }
-let lastShelfApp = null, tiltDir = null;
+let lastShelfApp = null, tiltDir = null, lastHomeFocus = -1;
 function shelfCard(a) {
   const c = el.shelfCard; c.innerHTML = '';
   const t = tileFor(a.id);
@@ -297,7 +297,10 @@ function renderHome() {
     tile.classList.toggle('focused', i === focusHome);
     tile.classList.remove('tilt-l', 'tilt-r');
     if (i === focusHome && tiltDir) { void tile.offsetWidth; tile.classList.add('tilt-' + tiltDir); }
+    tile.classList.remove('glint');
+    if (i === focusHome && lastHomeFocus !== i) { void tile.offsetWidth; tile.classList.add('glint'); }
   });
+  lastHomeFocus = focusHome;
   el.apps.style.transform = `translateX(${-Math.max(0, focusHome - 3) * 19.2}vw)`;
   tiltDir = null;
   // shelf
@@ -336,18 +339,27 @@ function renderClockChip() {
 }
 
 // ---- radio ---------------------------------------------------------------------
+let lastRadioFocus = -1;
 function renderRadio() {
-  el.stations.innerHTML = '';
-  STATIONS.forEach((s, i) => {
-    const b = document.createElement('button');
-    b.className = 'station' + (i === focusRadio ? ' focused' : '') + (radio.station && radio.station.id === s.id && media === 'radio' ? ' playing' : '');
-    b.style.setProperty('--hue', s.hue); b.setAttribute('role', 'listitem');
-    b.innerHTML = `<span class="bars"><i></i><i></i><i></i><i></i></span><span class="s-name"></span><span class="s-tag"></span>`;
-    b.querySelector('.s-name').textContent = s.name; b.querySelector('.s-tag').textContent = s.tag;
-    if (radio.station && radio.station.id === s.id && !radio.playing) b.querySelector('.bars').classList.add('still');
-    b.addEventListener('click', () => { focusRadio = i; playStation(s); });
-    el.stations.appendChild(b);
+  if (!el.stations.children.length) {
+    STATIONS.forEach((st, i) => {
+      const b = document.createElement('button');
+      b.className = 'station'; b.style.setProperty('--hue', st.hue); b.setAttribute('role', 'listitem'); b.style.setProperty('--i', i);
+      b.innerHTML = `<span class="bars"><i></i><i></i><i></i><i></i></span><span class="s-name"></span><span class="s-tag"></span>`;
+      b.querySelector('.s-name').textContent = st.name; b.querySelector('.s-tag').textContent = st.tag;
+      b.addEventListener('click', () => { focusRadio = i; playStation(st); });
+      el.stations.appendChild(b);
+    });
+  }
+  [...el.stations.children].forEach((b, i) => {
+    const st = STATIONS[i];
+    const isPlaying = media === 'radio' && radio.station && radio.station.id === st.id;
+    b.classList.toggle('focused', i === focusRadio);
+    b.classList.toggle('playing', !!isPlaying);
+    b.querySelector('.bars').classList.toggle('still', !!isPlaying && !radio.playing);
+    if (i === focusRadio && lastRadioFocus !== i) { b.classList.remove('glint'); void b.offsetWidth; b.classList.add('glint'); }
   });
+  lastRadioFocus = focusRadio;
   if (media === 'radio' && radio.station) {
     el.radioNow.innerHTML = '';
     const bars = document.createElement('span'); bars.className = 'bars'; bars.innerHTML = '<i></i><i></i><i></i><i></i>';
@@ -617,6 +629,7 @@ function selectYt(row, ci) {
   if (row.queue) { if (ci === q.index && media === 'youtube') { yt.view = 'watch'; renderYt(); try { player.playVideo(); } catch {} showNow(); sendState(); return; } apply(reduce(q, { type: 'jump', index: ci })); return; }
   apply(reduce(q, { type: 'playNow', video: v }));
 }
+let ytDomKey = '';
 function renderYt() {
   const show = screen === 'app' && app === 'youtube' && yt.view === 'browse';
   el.ytBrowse.classList.toggle('show', show);
@@ -625,39 +638,53 @@ function renderYt() {
   if (!show) return;
   const rows = ytRowsList();
   if (yt.focusRow >= rows.length) yt.focusRow = Math.max(0, rows.length - 1);
-  el.ytRows.innerHTML = '';
   el.ytHint.textContent = yt.key ? 'Auswählen mit dem Steuerkreuz. Suchbegriffe tippst du am Handy.' : 'Links vom Handy laufen sofort.';
-  if (!yt.key) {
-    const d = document.createElement('div'); d.className = 'yt-setup';
-    d.innerHTML = '<h3>Angesagte Videos und Suche direkt hier auf dem Fernseher</h3><p>Dafür braucht der Fernseher deinen kostenlosen Google-Schlüssel. Trag ihn in der Fernbedienung ein (Zahnrad oben rechts), er wird automatisch hierher übertragen.</p><ol><li>Google Cloud Console öffnen, Projekt anlegen.</li><li>„YouTube Data API v3“ aktivieren.</li><li>Unter „Anmeldedaten“ einen API-Schlüssel erstellen und in der Fernbedienung speichern.</li></ol><p>Bis dahin: Links am Handy einfügen, sie laufen sofort hier.</p>';
-    el.ytRows.appendChild(d);
+  const dataKey = [yt.key ? 'k' : '', yt.error, yt.loading ? 'l' : '', media === 'youtube' ? q.index + ':' + playback : '',
+    ...rows.map((r) => r.id + '=' + r.items.map((v) => v.id).join('.'))].join('|');
+  if (dataKey !== ytDomKey) {
+    ytDomKey = dataKey;
+    el.ytRows.innerHTML = '';
+    if (!yt.key) {
+      const d = document.createElement('div'); d.className = 'yt-setup';
+      d.innerHTML = '<h3>Angesagte Videos und Suche direkt hier auf dem Fernseher</h3><p>Dafür braucht der Fernseher deinen kostenlosen Google-Schlüssel. Trag ihn in der Fernbedienung ein (Zahnrad oben rechts), er wird automatisch hierher übertragen.</p><ol><li>Google Cloud Console öffnen, Projekt anlegen.</li><li>„YouTube Data API v3“ aktivieren.</li><li>Unter „Anmeldedaten“ einen API-Schlüssel erstellen und in der Fernbedienung speichern.</li></ol><p>Bis dahin: Links am Handy einfügen, sie laufen sofort hier.</p>';
+      el.ytRows.appendChild(d);
+    }
+    if (yt.error) { const m = document.createElement('p'); m.className = 'yt-msg'; m.textContent = yt.error; el.ytRows.appendChild(m); }
+    rows.forEach((row, ri) => {
+      const sec = document.createElement('section'); sec.className = 'yt-row'; sec.dataset.row = row.id;
+      const h = document.createElement('h3'); h.textContent = row.title; sec.appendChild(h);
+      const track = document.createElement('div'); track.className = 'yt-track';
+      if (!row.items.length) {
+        if (yt.loading) for (let k = 0; k < 5; k++) { const sk = document.createElement('div'); sk.className = 'yt-card skel'; sk.innerHTML = '<span class="th"></span><span class="t"></span><span class="c"></span>'; track.appendChild(sk); }
+        else { const m = document.createElement('p'); m.className = 'yt-msg'; m.textContent = 'Nichts gefunden'; track.appendChild(m); }
+      }
+      row.items.forEach((v, ci) => {
+        const card = document.createElement('button');
+        card.className = 'yt-card' + (row.queue && q.index >= 0 && ci < q.index ? ' dim' : '');
+        card.innerHTML = `<span class="th"><img alt="" loading="lazy"><span class="dur" hidden></span><span class="chip" hidden></span></span><span class="t"></span><span class="c"></span>`;
+        card.querySelector('img').src = v.thumb.replace('hqdefault', 'mqdefault');
+        if (v.duration) { const d = card.querySelector('.dur'); d.textContent = formatTime(v.duration); d.hidden = false; }
+        if (row.queue && ci === q.index && media === 'youtube') { const ch = card.querySelector('.chip'); ch.textContent = playback === 'playing' ? 'Läuft' : 'Weiter ansehen'; ch.hidden = false; }
+        card.querySelector('.t').textContent = v.title; card.querySelector('.c').textContent = v.channel;
+        card.addEventListener('click', () => { yt.focusRow = ri; yt.focusCol[row.id] = ci; selectYt(row, ci); });
+        track.appendChild(card);
+      });
+      sec.appendChild(track); el.ytRows.appendChild(sec);
+    });
   }
-  if (yt.error) { const m = document.createElement('p'); m.className = 'yt-msg'; m.textContent = yt.error; el.ytRows.appendChild(m); }
-  rows.forEach((row, ri) => {
-    const sec = document.createElement('section'); sec.className = 'yt-row' + (ri === yt.focusRow ? ' focused' : '');
-    const h = document.createElement('h3'); h.textContent = row.title; sec.appendChild(h);
-    const track = document.createElement('div'); track.className = 'yt-track';
+  // focus pass: classes and transforms only, so the movement glides
+  const sections = [...el.ytRows.querySelectorAll('.yt-row')];
+  sections.forEach((sec, ri) => {
+    const row = rows[ri]; if (!row) return;
     if (row.queue && yt.focusCol.queue === undefined) yt.focusCol.queue = Math.max(0, q.index);
     const fc = Math.max(0, Math.min(yt.focusCol[row.id] ?? 0, row.items.length - 1));
-    if (!row.items.length) { const m = document.createElement('p'); m.className = 'yt-msg'; m.textContent = yt.loading ? 'Lädt' : 'Nichts gefunden'; sec.appendChild(m); el.ytRows.appendChild(sec); return; }
-    row.items.forEach((v, ci) => {
-      const card = document.createElement('button');
-      card.className = 'yt-card' + (ri === yt.focusRow && ci === fc ? ' focused' : '') + (row.queue && q.index >= 0 && ci < q.index ? ' dim' : '');
-      const wide = v.thumb.replace('hqdefault', 'mqdefault');
-      card.innerHTML = `<span class="th"><img alt="" loading="lazy"><span class="dur" hidden></span><span class="chip" hidden></span></span><span class="t"></span><span class="c"></span>`;
-      card.querySelector('img').src = wide;
-      if (v.duration) { const d = card.querySelector('.dur'); d.textContent = formatTime(v.duration); d.hidden = false; }
-      if (row.queue && ci === q.index && media === 'youtube') { const ch = card.querySelector('.chip'); ch.textContent = playback === 'playing' ? 'Läuft' : 'Weiter ansehen'; ch.hidden = false; }
-      card.querySelector('.t').textContent = v.title; card.querySelector('.c').textContent = v.channel;
-      card.addEventListener('click', () => { yt.focusRow = ri; yt.focusCol[row.id] = ci; selectYt(row, ci); });
-      track.appendChild(card);
-    });
-    track.style.transform = `translateX(${-fc * 20.4}vw)`;
-    sec.appendChild(track); el.ytRows.appendChild(sec);
+    sec.classList.toggle('focused', ri === yt.focusRow);
+    const cards = sec.querySelectorAll('.yt-card:not(.skel)');
+    cards.forEach((c, ci) => { const on = ri === yt.focusRow && ci === fc; if (on && !c.classList.contains('focused')) { c.classList.remove('glint'); void c.offsetWidth; c.classList.add('glint'); } c.classList.toggle('focused', on); });
+    sec.querySelector('.yt-track').style.transform = `translateX(${-fc * 20.4}vw)`;
   });
-  requestAnimationFrame(() => { const f = el.ytRows.children[yt.focusRow + (yt.key ? 0 : 1) + (yt.error ? 1 : 0)]; el.ytRows.style.transform = `translateY(${f && yt.focusRow > 0 ? -f.offsetTop : 0}px)`; });
+  requestAnimationFrame(() => { const f = sections[yt.focusRow]; el.ytRows.style.transform = `translateY(${f && yt.focusRow > 0 ? -f.offsetTop : 0}px)`; });
 }
-
 // ---- now playing / OSD / queue panel (youtube) --------------------------------
 function renderNow() {
   const v = current(); if (!v) return;
