@@ -521,3 +521,5 @@ html, body { overflow: hidden; }
 .card-word.upper { text-transform: uppercase; letter-spacing: .06em; font-size: 3.4vw; }
 .card-word::after { content: ""; position: absolute; inset: 0; background: linear-gradient(165deg, rgba(255,255,255,.14), transparent 42%); pointer-events: none; }
 #tv.browsing .now { display: none; }
+.app-tile[data-app="ard"] .wordmark { font-size: 1.6vw; }
+.app-tile[data-app="joyn"] .wordmark, .app-tile[data-app="zdf"] .wordmark { letter-spacing: -0.02em; }

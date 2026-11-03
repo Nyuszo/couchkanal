@@ -208,7 +208,9 @@ test('stations have unique ids and https streams', async () => {
 });
 
 test('launchers can be renamed, re-pointed, added and never accept unsafe urls', async () => {
-  const { APPS, applyAppConfig, isLaunchUrl } = await import('../logic.js');
+  const { APPS, applyAppConfig, isLaunchUrl, isWebUrl, launchTarget } = await import('../logic.js');
+  assert.ok(isWebUrl('https://www.netflix.com/browse'));
+  assert.equal(isWebUrl('nflx://'), false);
   assert.ok(isLaunchUrl('nflx://'));
   assert.ok(isLaunchUrl('spotify:'));
   assert.equal(isLaunchUrl('javascript:alert(1)'), false);
@@ -232,4 +234,14 @@ test('launchers can be renamed, re-pointed, added and never accept unsafe urls',
   assert.equal(disney.url, 'disneyplus://home');
   assert.ok(!list.some((a) => a.id === 'custom-2'), 'unsafe custom launcher is dropped');
   assert.equal(list.length, APPS.length + 1);
+  // websites are the default target, the app only when chosen and available
+  const netflix = list.find((a) => a.id === 'netflix');
+  assert.equal(launchTarget(netflix), 'nflx://', 'services with an app open the app by default');
+  const asWeb = applyAppConfig(APPS, { launchers: [{ id: 'netflix', mode: 'web' }] }).find((a) => a.id === 'netflix');
+  assert.equal(launchTarget(asWeb), 'https://www.netflix.com/browse');
+  const ard = applyAppConfig(APPS, { launchers: [{ id: 'ard', mode: 'app' }] }).find((a) => a.id === 'ard');
+  assert.equal(launchTarget(ard), 'https://www.ardmediathek.de', 'no app address falls back to the website');
+  const web = applyAppConfig(APPS, { launchers: [{ id: 'custom-9', name: 'Mediathek', web: 'https://example.org/tv' }] }).find((a) => a.id === 'custom-9');
+  assert.equal(launchTarget(web), 'https://example.org/tv');
+  assert.equal(launchTarget({ kind: 'app' }), '');
 });

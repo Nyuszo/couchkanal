@@ -148,17 +148,31 @@ export const APPS = [
   { id: 'twitch', name: 'Twitch', kind: 'app', blurb: 'Live-Streams. Den Kanalnamen gibst du am Handy ein.' },
   { id: 'radio', name: 'Radio', kind: 'app', blurb: 'Sechzehn Sender, vom Deutschlandfunk bis Radio Paradise.' },
   { id: 'clock', name: 'Bildschirmschoner', kind: 'app', blurb: 'Uhr und Raumlicht. Radio läuft dabei weiter.' },
-  { id: 'netflix', name: 'Netflix', kind: 'launch', url: 'nflx://', blurb: 'Öffnet die Netflix-App auf dem iPad. Die Wiedergabe darin steuert Apples Fernsteuerung.' },
-  { id: 'prime', name: 'Prime Video', kind: 'launch', url: 'aiv://', blurb: 'Öffnet die Prime-Video-App auf dem iPad.' },
-  { id: 'disney', name: 'Disney+', kind: 'launch', url: 'disneyplus://', blurb: 'Öffnet die Disney+-App auf dem iPad. Adresse ungeprüft, in den Einstellungen änderbar.' },
-  { id: 'appletv', name: 'Apple TV', kind: 'launch', url: 'videos://', blurb: 'Öffnet die Apple-TV-App auf dem iPad.' },
-  { id: 'spotify', name: 'Spotify', kind: 'launch', url: 'spotify:', blurb: 'Öffnet die Spotify-App auf dem iPad.' },
+  { id: 'netflix', name: 'Netflix', kind: 'launch', mode: 'app', web: 'https://www.netflix.com/browse', url: 'nflx://', blurb: 'Startet die Netflix-App auf dem iPad, im Vollbild wie beim Apple TV. Zurück über die Home-Taste.' },
+  { id: 'prime', name: 'Prime Video', kind: 'launch', mode: 'app', web: 'https://www.primevideo.com', url: 'aiv://', blurb: 'Startet die Prime-Video-App auf dem iPad. Zurück über die Home-Taste.' },
+  { id: 'disney', name: 'Disney+', kind: 'launch', mode: 'app', web: 'https://www.disneyplus.com', url: 'disneyplus://', blurb: 'Startet die Disney+-App auf dem iPad. Adresse ungeprüft, in den Einstellungen änderbar.' },
+  { id: 'appletv', name: 'Apple TV', kind: 'launch', mode: 'app', web: 'https://tv.apple.com', url: 'videos://', blurb: 'Startet die Apple-TV-App auf dem iPad. Zurück über die Home-Taste.' },
+  { id: 'ard', name: 'ARD Mediathek', kind: 'launch', mode: 'web', web: 'https://www.ardmediathek.de', url: '', blurb: 'Öffnet die ARD Mediathek im Fenster über Couchkanal.' },
+  { id: 'zdf', name: 'ZDF', kind: 'launch', mode: 'web', web: 'https://www.zdf.de', url: '', blurb: 'Öffnet die ZDF-Mediathek im Fenster über Couchkanal.' },
+  { id: 'arte', name: 'Arte', kind: 'launch', mode: 'web', web: 'https://www.arte.tv/de/', url: '', blurb: 'Öffnet Arte im Fenster über Couchkanal.' },
+  { id: 'joyn', name: 'Joyn', kind: 'launch', mode: 'web', web: 'https://www.joyn.de', url: '', blurb: 'Öffnet Joyn im Fenster über Couchkanal.' },
+  { id: 'spotify', name: 'Spotify', kind: 'launch', mode: 'app', web: 'https://open.spotify.com', url: 'spotify:', blurb: 'Startet die Spotify-App auf dem iPad. Zurück über die Home-Taste.' },
 ];
 
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 export function isLaunchUrl(u) {
   const s = String(u ?? '').trim();
-  return SCHEME_RE.test(s) && !/^(javascript|data|vbscript|file):/i.test(s);
+  return SCHEME_RE.test(s) && !/^(javascript|data|vbscript|file|blob):/i.test(s);
+}
+export function isWebUrl(u) {
+  const s = String(u ?? '').trim();
+  return /^https?:\/\/[^\s/]+/i.test(s);
+}
+// Which address a launcher opens: the website unless it is set to the app and has one.
+export function launchTarget(a) {
+  if (!a || a.kind !== 'launch') return '';
+  if (a.mode === 'app' && a.url) return a.url;
+  return a.web || a.url || '';
 }
 
 // Ordered list with a hidden flag, from a saved config
@@ -171,12 +185,16 @@ export function applyAppConfig(defaults, config) {
   for (const l of Array.isArray(config?.launchers) ? config.launchers : []) {
     if (!l || typeof l !== 'object') continue;
     const id = clip(l.id, 40);
+    const mode = l.mode === 'app' ? 'app' : 'web';
     if (known.has(id) && known.get(id).kind === 'launch') {
       const a = known.get(id);
       if (clip(l.name, 24)) a.name = clip(l.name, 24);
-      if (isLaunchUrl(l.url)) a.url = clip(l.url, 200);
-    } else if (/^custom-[a-z0-9]+$/i.test(id) && clip(l.name, 24) && isLaunchUrl(l.url)) {
-      known.set(id, { id, name: clip(l.name, 24), kind: 'launch', url: clip(l.url, 200), blurb: `Öffnet ${clip(l.name, 24)} auf dem iPad.` });
+      if (isWebUrl(l.web)) a.web = clip(l.web, 300);
+      if (isLaunchUrl(l.url)) a.url = clip(l.url, 200); else if (l.url === '') a.url = '';
+      if (l.mode) a.mode = mode;
+    } else if (/^custom-[a-z0-9]+$/i.test(id) && clip(l.name, 24) && (isWebUrl(l.web) || isLaunchUrl(l.url))) {
+      const name = clip(l.name, 24);
+      known.set(id, { id, name, kind: 'launch', mode, web: isWebUrl(l.web) ? clip(l.web, 300) : '', url: isLaunchUrl(l.url) ? clip(l.url, 200) : '', blurb: `Öffnet ${name} im Fenster über Couchkanal.` });
     }
   }
   const order = Array.isArray(config?.order) ? config.order.filter((id) => known.has(id)) : [];

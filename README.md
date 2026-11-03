@@ -26,11 +26,15 @@ Handy aus mit dem Steuerkreuz oder direkt über die App-Leiste auswählst:
 - **Radio**: 16 Sender, vom Deutschlandfunk bis Radio Paradise. Läuft auch weiter,
   wenn du zum Startbildschirm oder in den Bildschirmschoner wechselst.
 - **Bildschirmschoner**: Uhr und Raumlicht.
-- **Netflix, Prime Video, Disney+, Apple TV, Spotify**: Verknüpfungen, die die
-  jeweilige App auf dem iPad öffnen. Die Wiedergabe darin steuert Apples
-  Fernsteuerung („Geräte in der Nähe steuern“), zurück zu Couchkanal geht es
-  über den Home-Bildschirm des iPads. Die Startadressen (z. B. `nflx://`) sind
-  in den Einstellungen änderbar, eigene Verknüpfungen lassen sich hinzufügen.
+- **Netflix, Prime Video, Disney+, Apple TV, ARD, ZDF, Arte, Joyn, Spotify**:
+  Verknüpfungen. Sie öffnen die Webseite des Dienstes. Läuft Couchkanal vom
+  Home-Bildschirm des iPads, erscheint die Seite in einem Fenster über der App,
+  zurück geht es mit „Fertig“ oben links. In Safari öffnet sie im selben Tab,
+  zurück mit der Zurück-Taste, Couchkanal läuft dann ohne neuen Tipp weiter.
+  Wahlweise startet eine Verknüpfung die iPad-App (Einstellungen, „App“), dafür
+  braucht sie die App-Adresse, zum Beispiel `nflx://`. Die Wiedergabe in fremden
+  Apps und Seiten steuert Apples Fernsteuerung („Geräte in der Nähe steuern“),
+  nicht Couchkanal. Eigene Verknüpfungen lassen sich hinzufügen.
 
 Reihenfolge und Sichtbarkeit der Kacheln stellst du in den Einstellungen der
 Fernbedienung ein (Zahnrad oben rechts). Netflix und ähnliche Dienste lassen sich

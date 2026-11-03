@@ -1,7 +1,7 @@
 import {
   makeCode, isValidCode, peerIdFor, formatTime,
   reduce, initialQueue, sanitizeVideo,
-  APPS, applyAppConfig, visibleApps, moveFocus, STATIONS, stationById, YT_ROWS, thumbFor,
+  APPS, applyAppConfig, visibleApps, moveFocus, STATIONS, stationById, YT_ROWS, thumbFor, launchTarget,
 } from './logic.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -39,9 +39,13 @@ const TILES = {
   disney: { bg: 'linear-gradient(160deg, #1b3c8a, #0b1a3a)', fg: '#f3efe6' },
   appletv: { bg: 'linear-gradient(160deg, #2c2c2e, #0a0a0a)', fg: '#f3efe6' },
   spotify: { bg: 'linear-gradient(160deg, #1ed760, #13843c)', fg: '#0a0a0a' },
+  ard: { bg: 'linear-gradient(160deg, #0f3fa3, #001d6a)', fg: '#f3efe6' },
+  zdf: { bg: 'linear-gradient(160deg, #f27e1a, #b8540e)', fg: '#f3efe6' },
+  arte: { bg: 'linear-gradient(160deg, #ff5200, #b63800)', fg: '#f3efe6' },
+  joyn: { bg: 'linear-gradient(160deg, #1a1a1a, #000000)', fg: '#00d4c8' },
   custom: { bg: 'linear-gradient(160deg, #3a4668, #1a2238)', fg: '#f3efe6' },
 };
-const GLOW = { youtube: '#ff3b3b', twitch: '#9146ff', radio: '#1aa092', clock: '#5b57d6', netflix: '#e50914', prime: '#00a8e1', disney: '#2f5fd6', appletv: '#8e8e93', spotify: '#1ed760' };
+const GLOW = { youtube: '#ff3b3b', twitch: '#9146ff', radio: '#1aa092', clock: '#5b57d6', netflix: '#e50914', prime: '#00a8e1', disney: '#2f5fd6', appletv: '#8e8e93', spotify: '#1ed760', ard: '#2f5fd6', zdf: '#f27e1a', arte: '#ff5200', joyn: '#00d4c8' };
 const tileFor = (id) => TILES[id] || TILES.custom;
 
 // ---- state -----------------------------------------------------------------
@@ -117,10 +121,13 @@ function setScreen(next, nextApp) {
 }
 function goHome() { setScreen('home'); sendState(); }
 function launchApp(a) {
+  const target = launchTarget(a);
+  if (!target) { toast(`${a.name} hat keine Adresse`); return; }
   launched = a.name; launchedAt = Date.now();
-  toast(`Öffne ${a.name} auf dem iPad`);
+  toast(`Öffne ${a.name}`);
   sendState();
-  after('launch', 350, () => { try { location.href = a.url; } catch {} });
+  try { sessionStorage.setItem('couchkanal.resume', '1'); } catch {}
+  after('launch', 350, () => { try { location.href = target; } catch {} });
   after('launchReset', 15000, () => { launched = ''; sendState(); });
 }
 function openApp(id) {
@@ -704,7 +711,7 @@ function showPanel(show, quiet = false) {
 function stateMessage() {
   return {
     t: 'state', code, booted, screen, app: screen === 'app' ? app : 'home', media,
-    apps: apps.map((a) => ({ id: a.id, name: a.name, hidden: !!a.hidden, kind: a.kind, url: a.url || '' })),
+    apps: apps.map((a) => ({ id: a.id, name: a.name, hidden: !!a.hidden, kind: a.kind, url: a.url || '', web: a.web || '', mode: a.mode || 'web' })),
     yt: { view: yt.view, hasKey: !!yt.key, searchQ: yt.searchQ, error: yt.error },
     launched: Date.now() - launchedAt < 15000 ? launched : '',
     focus: { home: focusHome, radio: focusRadio },
@@ -736,7 +743,7 @@ function handleMessage(conn, msg) {
     case 'open': openApp(String(msg.app)); return;
     case 'apps': {
       apps = applyAppConfig(APPS, { order: msg.order, hidden: msg.hidden, launchers: msg.launchers });
-      saveJSON('couchkanal.apps', { order: apps.map((a) => a.id), hidden: apps.filter((a) => a.hidden).map((a) => a.id), launchers: apps.filter((a) => a.kind === 'launch').map((a) => ({ id: a.id, name: a.name, url: a.url })) });
+      saveJSON('couchkanal.apps', { order: apps.map((a) => a.id), hidden: apps.filter((a) => a.hidden).map((a) => a.id), launchers: apps.filter((a) => a.kind === 'launch').map((a) => ({ id: a.id, name: a.name, url: a.url, web: a.web, mode: a.mode })) });
       focusHome = 0; renderHome(); toast('Apps angepasst'); break;
     }
     case 'toggle': toggleMedia(); break;
@@ -845,6 +852,8 @@ async function boot() {
   sendState();
 }
 el.boot.addEventListener('pointerdown', boot);
+// coming back from a website opened in this tab: skip the tap, the home screen was already running
+try { if (sessionStorage.getItem('couchkanal.resume') === '1') { sessionStorage.removeItem('couchkanal.resume'); booted = true; setScreen('home'); ensurePlayer().catch(() => {}); } } catch {}
 el.tapToPlay.addEventListener('pointerdown', retryMedia);
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible' && booted) { try { navigator.wakeLock && (await navigator.wakeLock.request('screen')); } catch {} }

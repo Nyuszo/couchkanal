@@ -22,7 +22,7 @@ const el = {
   settings: $('#settings'), appsConfig: $('#appsConfig'), applyApps: $('#applyApps'), apiKeyInput: $('#apiKeyInput'), saveKey: $('#saveKey'), keyStatus: $('#keyStatus'), tvCode: $('#tvCode'), unpair: $('#unpair'),
   toast: $('#toast'),
 };
-const CHIP_COLORS = { youtube: '#ff0000', twitch: '#a970ff', radio: '#ffb454', clock: '#8f9bff', netflix: '#e50914', prime: '#00a8e1', disney: '#6b8cff', appletv: '#c7c7cc', spotify: '#1ed760' };
+const CHIP_COLORS = { youtube: '#ff0000', twitch: '#a970ff', radio: '#ffb454', clock: '#8f9bff', netflix: '#e50914', prime: '#00a8e1', disney: '#6b8cff', appletv: '#c7c7cc', spotify: '#1ed760', ard: '#6b8cff', zdf: '#f27e1a', arte: '#ff5200', joyn: '#00d4c8' };
 
 const LS = { code: 'couchkanal.remote.code', key: 'couchkanal.apikey', twFavs: 'couchkanal.twitch.favs' };
 const store = {
@@ -153,7 +153,14 @@ function render() {
   if (!hw && document.activeElement !== el.volume) { el.volume.value = tv.volume; el.volume.style.setProperty('--pct', tv.volume + '%'); }
 
   if (!tv.booted) showNotice('Der Fernseher ist noch nicht gestartet: einmal auf das iPad tippen.');
-  if (tv.launched && tv.launched !== lastLaunched) { lastLaunched = tv.launched; showNotice(`${tv.launched} läuft jetzt auf dem iPad. Zurück zu Couchkanal: am iPad zum Home-Bildschirm, oder mit Apples Fernsteuerung die Home-Taste.`); }
+  if (tv.launched && tv.launched !== lastLaunched) {
+    lastLaunched = tv.launched;
+    const la = (tv.apps || []).find((a) => a.name === tv.launched);
+    const asApp = la && la.mode === 'app' && la.url;
+    showNotice(asApp
+      ? `${tv.launched} läuft jetzt als App auf dem iPad. Zurück zu Couchkanal über den Home-Bildschirm des iPads.`
+      : `${tv.launched} ist auf dem iPad geöffnet. Zurück zu Couchkanal mit „Fertig“ oben links, in Safari mit der Zurück-Taste.`);
+  }
   if (!tv.launched) lastLaunched = '';
   const browsing = app === 'youtube' && tv.yt && tv.yt.view === 'browse';
   el.ytDial.hidden = !browsing; el.ytBrowseHint.hidden = !browsing;
@@ -400,10 +407,18 @@ function renderAppsConfig() {
     const f = li.querySelector('.fields');
     if (launch) {
       const n = document.createElement('input'); n.value = a.name; n.placeholder = 'Name'; n.setAttribute('aria-label', 'Name'); n.autocapitalize = 'words';
-      const u = document.createElement('input'); u.value = a.url || ''; u.placeholder = 'Adresse, z. B. nflx://'; u.className = 'url'; u.setAttribute('aria-label', 'Startadresse'); u.autocapitalize = 'off'; u.spellcheck = false;
+      const w = document.createElement('input'); w.value = a.web || ''; w.placeholder = 'Webseite, z. B. https://www.netflix.com'; w.className = 'url'; w.setAttribute('aria-label', 'Webseite'); w.autocapitalize = 'off'; w.spellcheck = false; w.inputMode = 'url';
+      const u = document.createElement('input'); u.value = a.url || ''; u.placeholder = 'App-Adresse, optional, z. B. nflx://'; u.className = 'url'; u.setAttribute('aria-label', 'App-Adresse'); u.autocapitalize = 'off'; u.spellcheck = false;
+      const m = document.createElement('div'); m.className = 'mode';
+      const mw = document.createElement('button'); mw.type = 'button'; mw.textContent = 'Webseite'; mw.className = a.mode === 'app' ? '' : 'on';
+      const ma = document.createElement('button'); ma.type = 'button'; ma.textContent = 'App'; ma.className = a.mode === 'app' ? 'on' : '';
+      mw.addEventListener('click', () => { a.mode = 'web'; mw.className = 'on'; ma.className = ''; });
+      ma.addEventListener('click', () => { a.mode = 'app'; ma.className = 'on'; mw.className = ''; });
+      m.append(mw, ma);
       n.addEventListener('input', () => { a.name = n.value; });
+      w.addEventListener('input', () => { a.web = w.value; });
       u.addEventListener('input', () => { a.url = u.value; });
-      f.append(n, u);
+      f.append(n, w, u, m);
     } else {
       const n = document.createElement('span'); n.className = 'name' + (a.hidden ? ' off' : ''); n.textContent = a.name; f.appendChild(n);
     }
@@ -418,7 +433,7 @@ function renderAppsConfig() {
   });
 }
 function openSettings() {
-  appsDraft = (tv?.apps || APPS.map((a) => ({ ...a, hidden: false }))).map((a) => ({ ...a, kind: a.kind || 'app', url: a.url || '' }));
+  appsDraft = (tv?.apps || APPS.map((a) => ({ ...a, hidden: false }))).map((a) => ({ ...a, kind: a.kind || 'app', url: a.url || '', web: a.web || '', mode: a.mode || 'web' }));
   renderAppsConfig();
   el.apiKeyInput.value = apiKey;
   el.keyStatus.textContent = apiKey ? 'Ein Schlüssel ist gespeichert. Die Suche ist aktiv.' : 'Noch kein Schlüssel gespeichert.';
@@ -428,7 +443,7 @@ function openSettings() {
 el.settingsBtn.addEventListener('click', () => { buzz(); openSettings(); });
 el.applyApps.addEventListener('click', () => {
   if (appsDraft.every((a) => a.hidden)) { toast('Mindestens eine App bleibt sichtbar'); return; }
-  const launchers = appsDraft.filter((a) => a.kind === 'launch' && String(a.name).trim() && String(a.url).trim()).map((a) => ({ id: a.id, name: a.name, url: a.url }));
+  const launchers = appsDraft.filter((a) => a.kind === 'launch' && String(a.name).trim() && (String(a.web || '').trim() || String(a.url || '').trim())).map((a) => ({ id: a.id, name: a.name, url: a.url || '', web: a.web || '', mode: a.mode || 'web' }));
   cmd('apps', { order: appsDraft.map((a) => a.id), hidden: appsDraft.filter((a) => a.hidden).map((a) => a.id), launchers });
   toast('An den Fernseher geschickt');
 });
@@ -441,7 +456,7 @@ el.saveKey.addEventListener('click', () => {
 });
 el.unpair.addEventListener('click', () => { el.settings.close(); disconnect(); });
 el.addLauncher.addEventListener('click', () => {
-  appsDraft.push({ id: 'custom-' + Date.now().toString(36), name: '', url: '', kind: 'launch', hidden: false });
+  appsDraft.push({ id: 'custom-' + Date.now().toString(36), name: '', web: '', url: '', mode: 'web', kind: 'launch', hidden: false });
   renderAppsConfig();
   const inputs = el.appsConfig.querySelectorAll('li:last-child input'); if (inputs[0]) inputs[0].focus();
 });
