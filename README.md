@@ -13,10 +13,27 @@ Play, Pause, springen.
 Gehostet über GitHub Pages aus diesem Repository. Jede Änderung auf `main` ist
 nach etwa einer Minute live.
 
+## Apps auf dem Fernseher
+
+Nach dem Start zeigt das iPad einen Startbildschirm mit App-Kacheln, die du vom
+Handy aus mit dem Steuerkreuz oder direkt über die App-Leiste auswählst:
+
+- **YouTube**: Videos per Link oder Suche, Warteschlange, Play, Pause, Springen.
+- **Twitch**: Kanalnamen am Handy eingeben, der Stream läuft auf dem Fernseher.
+- **Radio**: 16 Sender, vom Deutschlandfunk bis Radio Paradise. Läuft auch weiter,
+  wenn du zum Startbildschirm oder in den Bildschirmschoner wechselst.
+- **Bildschirmschoner**: Uhr und Raumlicht.
+
+Reihenfolge und Sichtbarkeit der Kacheln stellst du in den Einstellungen der
+Fernbedienung ein (Zahnrad oben rechts). Netflix und ähnliche Dienste lassen sich
+nicht einbetten und fehlen deshalb.
+
 ## Wie es funktioniert
 
-- `tv.html` läuft auf dem iPad. Nach einem Tipp zeigt es einen vierstelligen Code.
-- `remote.html` läuft auf dem Handy. Code eingeben, fertig. Das Handy merkt sich den Code.
+- `tv.html` läuft auf dem iPad. Nach einem Tipp zeigt es einen vierstelligen Code
+  und einen QR-Code.
+- `remote.html` läuft auf dem Handy. Code eingeben oder den QR-Code scannen, fertig.
+  Das Handy merkt sich den Code.
 - Die Geräte reden direkt miteinander (WebRTC). Ein öffentlicher Vermittlungsdienst
   (PeerJS) hilft nur beim Finden, danach fließen die Befehle direkt.
 - Es braucht keinen eigenen Server, nur eine Adresse, unter der die Dateien liegen.

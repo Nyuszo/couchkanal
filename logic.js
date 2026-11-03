@@ -141,3 +141,59 @@ export function sanitizeVideo(v) {
     duration: Math.max(0, Math.floor(Number(v.duration) || 0)),
   };
 }
+
+// ---- Apps (the TV home screen) ---------------------------------------------
+export const APPS = [
+  { id: 'youtube', name: 'YouTube', blurb: 'Videos suchen, anhängen, abspielen. Alles vom Handy aus.' },
+  { id: 'twitch', name: 'Twitch', blurb: 'Live-Streams. Den Kanalnamen gibst du am Handy ein.' },
+  { id: 'radio', name: 'Radio', blurb: 'Sechzehn Sender, vom Deutschlandfunk bis Radio Paradise.' },
+  { id: 'clock', name: 'Bildschirmschoner', blurb: 'Uhr und Raumlicht. Radio läuft dabei weiter.' },
+];
+
+// Ordered list with a hidden flag, from a saved config {order:[ids], hidden:[ids]}.
+// Unknown ids are dropped, missing ids are appended in default order.
+export function applyAppConfig(defaults, config) {
+  const known = new Map(defaults.map((a) => [a.id, a]));
+  const order = Array.isArray(config?.order) ? config.order.filter((id) => known.has(id)) : [];
+  const hidden = new Set(Array.isArray(config?.hidden) ? config.hidden.filter((id) => known.has(id)) : []);
+  const ids = [...new Set([...order, ...defaults.map((a) => a.id)])];
+  const list = ids.map((id) => ({ ...known.get(id), hidden: hidden.has(id) }));
+  return list.every((a) => a.hidden) ? list.map((a) => ({ ...a, hidden: false })) : list;
+}
+export function visibleApps(list) { return list.filter((a) => !a.hidden); }
+
+// Grid focus: no wrapping, rows of `cols`, the last row may be shorter.
+export function moveFocus(index, dir, count, cols = count) {
+  if (count <= 0) return -1;
+  let i = Math.min(Math.max(index, 0), count - 1);
+  const c = Math.max(1, cols);
+  switch (dir) {
+    case 'left': if (i % c > 0) i -= 1; break;
+    case 'right': if (i % c < c - 1 && i + 1 < count) i += 1; break;
+    case 'up': if (i - c >= 0) i -= c; break;
+    case 'down': if (i + c < count) i += c; else if (Math.floor(i / c) < Math.floor((count - 1) / c)) i = count - 1; break;
+    default: break;
+  }
+  return i;
+}
+
+// ---- Radio stations (checked 2026-11-03) ----------------------------------
+export const STATIONS = [
+  { id: 'dlf', name: 'Deutschlandfunk', tag: 'Nachrichten und Wort', hue: 212, url: 'https://st01.sslstream.dlf.de/dlf/01/128/mp3/stream.mp3' },
+  { id: 'dlfkultur', name: 'DLF Kultur', tag: 'Kultur und Klassik', hue: 262, url: 'https://st02.sslstream.dlf.de/dlf/02/128/mp3/stream.mp3' },
+  { id: 'dlfnova', name: 'DLF Nova', tag: 'Junges Wort', hue: 186, url: 'https://st03.sslstream.dlf.de/dlf/03/128/mp3/stream.mp3' },
+  { id: '1live', name: '1LIVE', tag: 'Pop und Charts', hue: 340, url: 'https://wdr-1live-live.icecastssl.wdr.de/wdr/1live/live/mp3/128/stream.mp3' },
+  { id: 'wdr2', name: 'WDR 2', tag: 'Pop und Information', hue: 24, url: 'https://wdr-wdr2-rheinland.icecastssl.wdr.de/wdr/wdr2/rheinland/mp3/128/stream.mp3' },
+  { id: 'wdr4', name: 'WDR 4', tag: 'Schlager und Oldies', hue: 48, url: 'https://wdr-wdr4-live.icecastssl.wdr.de/wdr/wdr4/live/mp3/128/stream.mp3' },
+  { id: 'ndr2', name: 'NDR 2', tag: 'Pop aus dem Norden', hue: 200, url: 'https://icecast.ndr.de/ndr/ndr2/niedersachsen/mp3/128/stream.mp3' },
+  { id: 'njoy', name: 'N-JOY', tag: 'Junge Hits', hue: 150, url: 'https://icecast.ndr.de/ndr/njoy/live/mp3/128/stream.mp3' },
+  { id: 'swr3', name: 'SWR3', tag: 'Pop und Comedy', hue: 90, url: 'https://liveradio.swr.de/sw282p3/swr3/play.mp3' },
+  { id: 'swr1', name: 'SWR1', tag: 'Hits aus fünf Jahrzehnten', hue: 10, url: 'https://liveradio.swr.de/sw282p3/swr1bw/play.mp3' },
+  { id: 'bremen4', name: 'Bremen Vier', tag: 'Pop aus Bremen', hue: 300, url: 'https://icecast.radiobremen.de/rb/bremenvier/live/mp3/128/stream.mp3' },
+  { id: 'antenne', name: 'Antenne Bayern', tag: 'Hits aus Bayern', hue: 220, url: 'https://s1-webradio.antenne.de/antenne' },
+  { id: 'fm4', name: 'FM4', tag: 'Alternative aus Wien', hue: 120, url: 'https://orf-live.ors-shoutcast.at/fm4-q2a' },
+  { id: 'oe3', name: 'Ö3', tag: 'Hits aus Österreich', hue: 0, url: 'https://orf-live.ors-shoutcast.at/oe3-q2a' },
+  { id: 'bytefm', name: 'ByteFM', tag: 'Handverlesene Musik', hue: 170, url: 'https://bytefm.cast.addradio.de/bytefm/main/mid/stream.mp3' },
+  { id: 'paradise', name: 'Radio Paradise', tag: 'Eclectic, ohne Werbung', hue: 36, url: 'https://stream.radioparadise.com/aac-320' },
+];
+export function stationById(id) { return STATIONS.find((s) => s.id === id) || null; }

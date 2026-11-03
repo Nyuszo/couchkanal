@@ -1,13 +1,20 @@
 import {
-  makeCode, isValidCode, peerIdFor, thumbFor, formatTime,
-  reduce, initialQueue, sanitizeVideo
+  makeCode, isValidCode, peerIdFor, formatTime,
+  reduce, initialQueue, sanitizeVideo,
+  APPS, applyAppConfig, visibleApps, moveFocus, STATIONS, stationById,
 } from './logic.js';
 
 const $ = (sel) => document.querySelector(sel);
 const tv = $('#tv');
 const el = {
-  boot: $('#boot'), idle: $('#idle'), stage: $('#stage'),
-  clock: $('#clock'), code: $('#code'), idleLead: $('#idleLead'), idleHint: $('#idleHint'),
+  boot: $('#boot'), home: $('#home'),
+  clock: $('#clock'), date: $('#date'), bigClock: $('#bigClock'), bigDate: $('#bigDate'),
+  code: $('#code'), idleLead: $('#idleLead'), idleHint: $('#idleHint'), qr: $('#qr'),
+  shelfApp: $('#shelfApp'), shelfCard: $('#shelfCard'), shelfKicker: $('#shelfKicker'), shelfTitle: $('#shelfTitle'), shelfText: $('#shelfText'), shelfNow: $('#shelfNow'),
+  apps: $('#apps'),
+  appScreens: { youtube: $('#appYoutube'), twitch: $('#appTwitch'), radio: $('#appRadio'), clock: $('#appClock') },
+  ytEmpty: $('#ytEmpty'), twEmpty: $('#twEmpty'), twChip: $('#twChip'), twChipText: $('#twChipText'),
+  radioNow: $('#radioNow'), stations: $('#stations'), radioChip: $('#radioChip'), radioChipText: $('#radioChipText'),
   status: $('#status'), statusText: $('#statusText'),
   now: $('#now'), nowThumb: $('#nowThumb'), nowTitle: $('#nowTitle'), nowChannel: $('#nowChannel'),
   nowFill: $('#nowFill'), nowPos: $('#nowPos'), nowDur: $('#nowDur'), nowNext: $('#nowNext'), nowNextTitle: $('#nowNextTitle'),
@@ -22,125 +29,377 @@ const el = {
 const IS_IOS = /iP(ad|hone|od)/.test(navigator.platform)
   || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
+const TILES = {
+  youtube: { bg: 'linear-gradient(160deg, #ffffff, #e6e6ea)', fg: '#ff0000' },
+  twitch: { bg: 'linear-gradient(160deg, #a970ff, #6d28d9)', fg: '#ffffff' },
+  radio: { bg: 'linear-gradient(160deg, #1fb3a3, #0b4f49)', fg: '#ffffff' },
+  clock: { bg: 'linear-gradient(160deg, #3b36a8, #1b1850)', fg: '#f3efe6' },
+};
+const GLOW = { youtube: '#ff3b3b', twitch: '#9146ff', radio: '#1aa092', clock: '#5b57d6' };
+
 // ---- state -----------------------------------------------------------------
-let q = initialQueue();
-let playback = 'idle';          // idle | loading | playing | paused | buffering | blocked
-let pos = 0, dur = 0, volume = 100, muted = false;
-let panelOpen = false;
-let currentKey = null;          // `${index}:${id}` of the video loaded into the player
+let screen = 'boot';            // boot | home | app
+let app = 'home';               // youtube | twitch | radio | clock (when screen === 'app')
+let media = 'none';             // which app owns the sound: none | youtube | twitch | radio
 let booted = false;
 
+let apps = applyAppConfig(APPS, loadJSON('couchkanal.apps'));
+let focusHome = 0, focusRadio = 0;
+
+let q = initialQueue();
+let playback = 'idle';          // youtube: idle | loading | playing | paused | buffering | blocked
+let pos = 0, dur = 0, volume = 100, muted = false;
+let panelOpen = false;
+let currentKey = null;
 let player = null, playerReady = false, playerPromise = null;
+
+const radio = { station: null, playing: false, buffering: false, error: '' };
+const audio = new Audio(); audio.preload = 'none';
+
+const twitch = { channel: '', playing: false, online: null, ready: false };
+let twitchPlayer = null, twitchPromise = null;
+
 let peer = null, code = null, idRetries = 0;
 const conns = new Set();
 
 // ---- helpers ---------------------------------------------------------------
 const timers = {};
 function after(name, ms, fn) { clearTimeout(timers[name]); timers[name] = setTimeout(fn, ms); }
-function setState(s) { tv.dataset.state = s; }
-function setStatus(kind, text) {
-  el.status.className = 'status ' + kind;
-  el.statusText.textContent = text;
-  if (kind === 'ok' && tv.dataset.state === 'play') after('statusFade', 3500, () => el.status.classList.add('fade'));
-}
+function loadJSON(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
+function saveJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 function toast(text) {
-  el.toast.textContent = text;
-  el.toast.classList.add('show');
+  el.toast.textContent = text; el.toast.classList.add('show');
   after('toast', 2600, () => el.toast.classList.remove('show'));
 }
+function setStatus(kind, text) {
+  el.status.className = 'status glass ' + kind;
+  el.statusText.textContent = text;
+  el.status.classList.remove('fade');
+  if (kind === 'ok' && screen === 'app' && (app === 'youtube' || app === 'twitch')) after('statusFade', 3500, () => el.status.classList.add('fade'));
+}
+const DAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 function tickClock() {
   const d = new Date();
-  el.clock.textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  const t = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  const date = `${DAYS[d.getDay()]}, ${d.getDate()}. ${MONTHS[d.getMonth()]}`;
+  el.clock.textContent = t; el.bigClock.textContent = t;
+  el.date.textContent = date; el.bigDate.textContent = date;
 }
 function current() { return q.index >= 0 ? q.queue[q.index] : null; }
 function upcoming() { return q.index >= 0 ? q.queue[q.index + 1] : null; }
+function connected() { return conns.size > 0; }
 
-// ---- idle screen -------------------------------------------------------------
+// ---- screens -----------------------------------------------------------------
+function setScreen(next, nextApp) {
+  screen = next; if (nextApp) app = nextApp;
+  tv.dataset.state = screen; tv.dataset.app = screen === 'app' ? app : 'home';
+  el.boot.classList.toggle('active', screen === 'boot');
+  el.home.classList.toggle('active', screen === 'home');
+  for (const [id, sec] of Object.entries(el.appScreens)) sec.classList.toggle('active', screen === 'app' && app === id);
+  el.status.classList.remove('fade');
+  if (screen !== 'app' || app !== 'youtube') { el.now.classList.remove('show'); showPanel(false, true); }
+  if (screen === 'home') renderHome();
+  if (screen === 'app' && app === 'radio') renderRadio();
+  if (screen === 'app' && app === 'clock') renderClockChip();
+  if (screen === 'app' && app === 'youtube' && current() && playback !== 'idle') showNow(playback === 'paused');
+  if (connected() && (app === 'youtube' || app === 'twitch') && screen === 'app') after('statusFade', 3500, () => el.status.classList.add('fade'));
+}
+function goHome() { setScreen('home'); sendState(); }
+function openApp(id) {
+  if (!apps.some((a) => a.id === id)) return;
+  if (media !== 'none' && media !== id && id !== 'clock') stopMedia(media);
+  setScreen('app', id);
+  if (id === 'youtube') { el.ytEmpty.hidden = !!current(); if (current() && playback === 'idle') loadCurrent(); }
+  if (id === 'twitch') { el.twEmpty.hidden = !!twitch.channel; if (twitch.channel) ensureTwitch(twitch.channel); }
+  sendState();
+}
+function back() {
+  if (screen === 'app') goHome();
+  else sendState();
+}
+function nav(dir) {
+  if (screen === 'home') {
+    const list = visibleApps(apps);
+    const before = focusHome;
+    focusHome = moveFocus(focusHome, dir, list.length);
+    tiltDir = focusHome > before ? 'r' : (focusHome < before ? 'l' : null);
+    renderHome(); sendState(); return;
+  }
+  if (screen === 'app' && app === 'radio') {
+    focusRadio = moveFocus(focusRadio, dir, STATIONS.length, 4);
+    renderRadio(); sendState(); return;
+  }
+  if (screen === 'app' && app === 'youtube' && playerReady && current()) {
+    if (dir === 'left') seekBy(-10); else if (dir === 'right') seekBy(10);
+    return;
+  }
+}
+function select() {
+  if (screen === 'home') { const list = visibleApps(apps); const a = list[focusHome]; if (a) openApp(a.id); return; }
+  if (screen === 'app' && app === 'radio') { playStation(STATIONS[focusRadio]); return; }
+  if (screen === 'app' && app === 'youtube') { toggleMedia(); return; }
+  if (screen === 'app' && app === 'twitch') { toggleMedia(); return; }
+  if (screen === 'app' && app === 'clock') { goHome(); }
+}
+
+// ---- home rendering ----------------------------------------------------------
 function renderCode(c, confirmed) {
   el.code.classList.toggle('pending', !confirmed);
+  el.code.classList.toggle('waiting', confirmed && !connected());
   el.code.innerHTML = '';
   [...c].forEach((d, i) => {
-    const s = document.createElement('span');
+    const s = document.createElement('span'); s.className = 'tile';
     s.textContent = d; s.style.setProperty('--i', i);
     el.code.appendChild(s);
   });
 }
-function updateIdle() {
-  const connected = conns.size > 0;
-  el.idle.classList.toggle('connected', connected);
-  if (!connected) {
-    el.idleLead.textContent = 'Öffne die Fernbedienung am Handy und gib diesen Code ein';
-    el.idleHint.textContent = 'Die Fernbedienung liegt unter derselben Adresse wie diese Seite.';
-  } else if (q.queue.length && q.index < 0) {
-    el.idleLead.textContent = 'Warteschlange durchgespielt';
-    el.idleHint.textContent = 'Such dir am Handy das nächste Video aus. Der Code bleibt gültig.';
-  } else {
-    el.idleLead.textContent = 'Handy verbunden. Such dir dort etwas aus.';
-    el.idleHint.textContent = 'Der Code bleibt gültig, falls du dich neu verbinden musst.';
+function renderQR() {
+  if (!code || typeof qrcode !== 'function') return;
+  try {
+    const url = new URL('remote.html', location.href); url.searchParams.set('code', code);
+    const q2 = qrcode(0, 'M'); q2.addData(url.href); q2.make();
+    el.qr.innerHTML = q2.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+  } catch (e) { el.qr.textContent = ''; }
+}
+function mediaLabel() {
+  if (media === 'youtube' && current()) return current().title;
+  if (media === 'twitch' && twitch.channel) return `Twitch: ${twitch.channel}`;
+  if (media === 'radio' && radio.station) return radio.station.name;
+  return '';
+}
+let lastShelfApp = null, tiltDir = null;
+function shelfCard(a) {
+  const c = el.shelfCard; c.innerHTML = '';
+  const t = TILES[a.id];
+  c.style.setProperty('--tile-bg', t.bg); c.style.setProperty('--tile-fg', t.fg);
+  if (a.id === 'youtube') {
+    const v = current() || q.queue[q.queue.length - 1];
+    if (v) {
+      const img = document.createElement('img'); img.src = v.thumb; img.alt = '';
+      const sub = document.createElement('div'); sub.className = 'card-sub'; sub.textContent = current() ? (playback === 'playing' ? 'Läuft gerade' : 'Pausiert') : 'Zuletzt gesehen';
+      const title = document.createElement('div'); title.className = 'card-title'; title.textContent = v.title;
+      c.append(img, Object.assign(document.createElement('div'), { className: 'card-scrim' }), sub, title);
+    } else c.innerHTML = '<div class="card-logo"><svg class="logo"><use href="#l-youtube"/></svg></div>';
+    return;
+  }
+  if (a.id === 'twitch') {
+    if (twitch.channel) {
+      const img = document.createElement('img'); img.alt = '';
+      img.src = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${twitch.channel}-640x360.jpg?t=${Math.floor(Date.now() / 60000)}`;
+      const sub = document.createElement('div'); sub.className = 'card-sub'; sub.textContent = twitch.online === false ? 'Gerade offline' : (twitch.playing ? 'Live' : 'Kanal geöffnet');
+      const title = document.createElement('div'); title.className = 'card-title'; title.textContent = twitch.channel;
+      c.append(img, Object.assign(document.createElement('div'), { className: 'card-scrim' }), sub, title);
+    } else c.innerHTML = '<div class="card-logo"><svg class="logo"><use href="#l-twitch"/></svg></div>';
+    return;
+  }
+  if (a.id === 'radio') {
+    if (media === 'radio' && radio.station) {
+      const d = document.createElement('div'); d.className = 'card-radio'; d.style.setProperty('--hue', radio.station.hue);
+      d.innerHTML = `<span class="bars${radio.playing ? '' : ' still'}"><i></i><i></i><i></i><i></i></span><span class="w"></span><span class="s"></span>`;
+      d.querySelector('.w').textContent = radio.station.name; d.querySelector('.s').textContent = radio.station.tag;
+      c.appendChild(d);
+    } else {
+      const d = document.createElement('div'); d.className = 'card-stations';
+      STATIONS.slice(0, 6).forEach((s) => { const sp = document.createElement('span'); sp.style.setProperty('--hue', s.hue); sp.textContent = s.name; d.appendChild(sp); });
+      c.appendChild(d);
+    }
+    return;
+  }
+  if (a.id === 'clock') {
+    const d = document.createElement('div'); d.className = 'card-clock';
+    d.innerHTML = `<span class="t">${el.clock.textContent}</span><span class="d">${el.date.textContent}</span>`;
+    c.appendChild(d);
   }
 }
-
-// ---- now playing / OSD -------------------------------------------------------
-function renderNow() {
-  const v = current();
-  if (!v) return;
-  el.nowThumb.src = v.thumb; el.nowTitle.textContent = v.title; el.nowChannel.textContent = v.channel;
-  const n = upcoming();
-  el.nowNext.hidden = !n;
-  if (n) el.nowNextTitle.textContent = n.title;
-  el.ambientArt.src = v.thumb; tv.classList.add('has-art');
-}
-function renderProgress() {
-  el.nowFill.style.width = dur ? (pos / dur * 100).toFixed(2) + '%' : '0%';
-  el.nowPos.textContent = formatTime(pos);
-  el.nowDur.textContent = formatTime(dur);
-}
-function showNow(sticky = false) {
-  renderNow(); renderProgress();
-  el.now.classList.add('show');
-  clearTimeout(timers.now);
-  if (!sticky) after('now', 4200, () => el.now.classList.remove('show'));
-}
-function osdCenter(icon, label = '') {
-  el.osdCenterIcon.setAttribute('href', '#i-' + icon);
-  el.osdCenterLabel.textContent = label;
-  el.osdCenter.classList.remove('show');
-  void el.osdCenter.offsetWidth; // restart the animation
-  el.osdCenter.classList.add('show');
-}
-function osdVolume() {
-  el.osdVolIcon.setAttribute('href', muted ? '#i-mute' : '#i-vol');
-  el.osdVolFill.style.height = (muted ? 0 : volume) + '%';
-  el.osdVolLabel.textContent = muted ? 'Stumm' : String(volume);
-  el.osdVolume.classList.add('show');
-  after('vol', 1600, () => el.osdVolume.classList.remove('show'));
-}
-function renderQueue() {
-  el.queueList.innerHTML = '';
-  if (!q.queue.length) {
-    const li = document.createElement('li'); li.className = 'empty'; li.textContent = 'Noch nichts in der Warteschlange.';
-    el.queueList.appendChild(li); return;
+function renderHome() {
+  el.home.classList.toggle('paired', connected());
+  el.code.classList.toggle('waiting', !connected() && !el.code.classList.contains('pending'));
+  const list = visibleApps(apps);
+  if (focusHome >= list.length) focusHome = Math.max(0, list.length - 1);
+  // tiles: built once per app set (so the entrance plays once), focus is a class toggle
+  const key = list.map((a) => a.id).join(',');
+  if (el.apps.dataset.key !== key) {
+    el.apps.dataset.key = key;
+    el.apps.innerHTML = '';
+    list.forEach((a, i) => {
+      const slot = document.createElement('div');
+      slot.className = 'app-slot'; slot.dataset.app = a.id;
+      slot.style.setProperty('--i', i); slot.setAttribute('role', 'listitem');
+      const b = document.createElement('button');
+      b.className = 'app-tile'; b.dataset.app = a.id; b.setAttribute('aria-label', a.name);
+      const t = TILES[a.id] || TILES.clock;
+      b.style.setProperty('--tile-bg', t.bg); b.style.setProperty('--tile-fg', t.fg);
+      b.innerHTML = `<svg class="logo"><use href="#l-${a.id}"/></svg>`;
+      b.addEventListener('click', () => { focusHome = i; openApp(a.id); });
+      const name = document.createElement('span'); name.className = 'app-name';
+      name.innerHTML = '<span class="live-dot"></span>'; name.append(a.name);
+      slot.append(b, name);
+      el.apps.appendChild(slot);
+    });
   }
-  const from = Math.max(0, Math.min(q.index - 1, q.queue.length - 8));
-  q.queue.slice(from, from + 8).forEach((v, k) => {
-    const i = from + k;
-    const li = document.createElement('li');
-    li.className = i === q.index ? 'current' : (q.index >= 0 && i < q.index ? 'done' : '');
-    li.innerHTML = `<span class="n">${i + 1}</span><img alt=""><div><div class="t"></div><div class="c"></div></div>`;
-    li.querySelector('img').src = v.thumb;
-    li.querySelector('.t').textContent = v.title;
-    li.querySelector('.c').textContent = v.channel;
-    el.queueList.appendChild(li);
+  [...el.apps.children].forEach((slot, i) => {
+    const a = list[i]; const tile = slot.querySelector('.app-tile');
+    slot.classList.toggle('focused', i === focusHome);
+    slot.classList.toggle('live', !!a && media === a.id);
+    tile.classList.toggle('focused', i === focusHome);
+    tile.classList.remove('tilt-l', 'tilt-r');
+    if (i === focusHome && tiltDir) { void tile.offsetWidth; tile.classList.add('tilt-' + tiltDir); }
   });
+  tiltDir = null;
+  // shelf
+  const a = list[focusHome];
+  if (a) {
+    el.shelfApp.style.setProperty('--tile-a', GLOW[a.id] || '#777');
+    el.shelfKicker.textContent = media === a.id ? 'Läuft gerade' : '';
+    el.shelfTitle.textContent = a.name;
+    el.shelfText.textContent = a.blurb;
+    const label = media === a.id ? mediaLabel() : (media !== 'none' && a.id === 'clock' ? mediaLabel() : '');
+    el.shelfNow.innerHTML = '';
+    if (label) {
+      const bars = document.createElement('span'); bars.className = 'bars'; bars.innerHTML = '<i></i><i></i><i></i><i></i>';
+      const stillness = (media === 'youtube' && playback !== 'playing') || (media === 'radio' && !radio.playing) || (media === 'twitch' && !twitch.playing);
+      if (stillness) bars.classList.add('still');
+      el.shelfNow.append(bars, document.createTextNode(label));
+    }
+    shelfCard(a);
+    if (lastShelfApp !== a.id) {
+      lastShelfApp = a.id;
+      el.shelfApp.classList.remove('swap'); void el.shelfApp.offsetWidth; el.shelfApp.classList.add('swap');
+      after('swap', 800, () => el.shelfApp.classList.remove('swap'));
+    }
+  }
+  if (!connected()) {
+    el.idleLead.textContent = 'Öffne die Fernbedienung am Handy und gib diesen Code ein';
+    el.idleHint.textContent = 'Oder scanne den Code rechts mit der Kamera deines Handys.';
+  }
+  renderClockChip();
 }
-function showPanel(show) {
-  panelOpen = show;
-  renderQueue();
-  el.queuePanel.classList.toggle('show', show);
-  if (show) after('panel', 9000, () => { panelOpen = false; el.queuePanel.classList.remove('show'); sendState(); });
+function renderClockChip() {
+  const label = media !== 'none' ? mediaLabel() : '';
+  el.radioChip.hidden = !label;
+  el.radioChipText.textContent = label;
+  el.radioChip.querySelector('.bars').classList.toggle('still', !(media === 'radio' ? radio.playing : media === 'youtube' ? playback === 'playing' : twitch.playing));
 }
 
-// ---- YouTube player ----------------------------------------------------------
+// ---- radio ---------------------------------------------------------------------
+function renderRadio() {
+  el.stations.innerHTML = '';
+  STATIONS.forEach((s, i) => {
+    const b = document.createElement('button');
+    b.className = 'station' + (i === focusRadio ? ' focused' : '') + (radio.station && radio.station.id === s.id && media === 'radio' ? ' playing' : '');
+    b.style.setProperty('--hue', s.hue); b.setAttribute('role', 'listitem');
+    b.innerHTML = `<span class="bars"><i></i><i></i><i></i><i></i></span><span class="s-name"></span><span class="s-tag"></span>`;
+    b.querySelector('.s-name').textContent = s.name; b.querySelector('.s-tag').textContent = s.tag;
+    if (radio.station && radio.station.id === s.id && !radio.playing) b.querySelector('.bars').classList.add('still');
+    b.addEventListener('click', () => { focusRadio = i; playStation(s); });
+    el.stations.appendChild(b);
+  });
+  if (media === 'radio' && radio.station) {
+    el.radioNow.innerHTML = '';
+    const bars = document.createElement('span'); bars.className = 'bars'; bars.innerHTML = '<i></i><i></i><i></i><i></i>';
+    if (!radio.playing) bars.classList.add('still');
+    el.radioNow.append(bars, document.createTextNode(radio.error ? `${radio.station.name}: ${radio.error}` : (radio.buffering ? `${radio.station.name} lädt` : radio.station.name)));
+  } else {
+    el.radioNow.textContent = 'Wähle einen Sender';
+  }
+}
+function playStation(s) {
+  if (!s) return;
+  if (media !== 'none' && media !== 'radio') stopMedia(media);
+  media = 'radio';
+  radio.station = s; radio.error = ''; radio.buffering = true; radio.playing = false;
+  audio.src = s.url; audio.muted = muted;
+  audio.play().then(() => { el.tapToPlay.hidden = true; }).catch(() => {
+    radio.buffering = false;
+    el.tapTitle.textContent = s.name; el.tapToPlay.hidden = false;
+    renderRadio(); sendState();
+  });
+  renderRadio(); renderHome(); sendState();
+}
+audio.addEventListener('playing', () => { radio.playing = true; radio.buffering = false; radio.error = ''; el.tapToPlay.hidden = true; renderRadio(); renderHome(); renderClockChip(); sendState(); });
+audio.addEventListener('pause', () => { radio.playing = false; renderRadio(); renderHome(); renderClockChip(); sendState(); });
+audio.addEventListener('waiting', () => { radio.buffering = true; renderRadio(); sendState(); });
+audio.addEventListener('error', () => { radio.playing = false; radio.buffering = false; radio.error = 'nicht erreichbar'; renderRadio(); sendState(); });
+
+// ---- twitch --------------------------------------------------------------------
+function ensureTwitch(channel) {
+  const host = location.hostname || 'localhost';
+  const create = () => {
+    if (twitchPlayer) { twitchPlayer.setChannel(channel); return; }
+    twitchPlayer = new Twitch.Player('twitchPlayer', { channel, parent: [host], width: '100%', height: '100%', autoplay: true, muted: muted });
+    const P = Twitch.Player;
+    twitchPlayer.addEventListener(P.READY, () => { twitch.ready = true; try { if (!IS_IOS) twitchPlayer.setVolume(volume / 100); } catch {} });
+    twitchPlayer.addEventListener(P.PLAY, () => { twitch.playing = true; el.tapToPlay.hidden = true; renderTwitch(); renderHome(); sendState(); });
+    twitchPlayer.addEventListener(P.PAUSE, () => { twitch.playing = false; renderTwitch(); renderHome(); sendState(); });
+    twitchPlayer.addEventListener(P.ONLINE, () => { twitch.online = true; renderTwitch(); sendState(); });
+    twitchPlayer.addEventListener(P.OFFLINE, () => { twitch.online = false; twitch.playing = false; renderTwitch(); sendState(); });
+  };
+  if (!twitchPromise) {
+    twitchPromise = new Promise((resolve) => {
+      if (window.Twitch && window.Twitch.Player) return resolve();
+      const s = document.createElement('script'); s.src = 'https://player.twitch.tv/js/embed/v1.js'; s.onload = resolve; document.head.appendChild(s);
+    });
+  }
+  twitchPromise.then(create);
+}
+function openChannel(name) {
+  const ch = String(name || '').trim().toLowerCase().replace(/^https?:\/\/(www\.)?twitch\.tv\//, '').replace(/[^a-z0-9_]/g, '').slice(0, 25);
+  if (!ch) return;
+  if (media !== 'none' && media !== 'twitch') stopMedia(media);
+  media = 'twitch'; twitch.channel = ch; twitch.online = null; twitch.playing = false;
+  if (!(screen === 'app' && app === 'twitch')) setScreen('app', 'twitch');
+  el.twEmpty.hidden = true;
+  ensureTwitch(ch);
+  renderTwitch(); renderHome(); sendState();
+  after('twAutoplay', 6000, () => { if (media === 'twitch' && !twitch.playing && twitch.online !== false) { el.tapTitle.textContent = `Twitch: ${ch}`; el.tapToPlay.hidden = false; sendState(); } });
+}
+function renderTwitch() {
+  el.twChip.hidden = !twitch.channel;
+  el.twChip.classList.toggle('off', twitch.online === false);
+  el.twChipText.textContent = twitch.online === false ? `${twitch.channel} ist gerade offline` : twitch.channel;
+}
+
+// ---- media (shared) -------------------------------------------------------------
+function stopMedia(which) {
+  if (which === 'youtube') { try { if (playerReady) player.stopVideo(); } catch {} playback = 'idle'; currentKey = null; pos = 0; q = { ...q, index: -1 }; el.now.classList.remove('show'); }
+  if (which === 'twitch') { try { if (twitchPlayer) twitchPlayer.pause(); } catch {} twitch.playing = false; }
+  if (which === 'radio') { try { audio.pause(); audio.removeAttribute('src'); audio.load(); } catch {} radio.playing = false; radio.station = null; }
+  if (media === which) media = 'none';
+  el.tapToPlay.hidden = true;
+  renderHome(); renderClockChip();
+}
+function toggleMedia() {
+  if (media === 'youtube' && playerReady && current()) {
+    if (playback === 'playing' || playback === 'buffering') { player.pauseVideo(); osdCenter('pause'); }
+    else { player.playVideo(); osdCenter('play'); }
+    return;
+  }
+  if (media === 'twitch' && twitchPlayer) { twitch.playing ? twitchPlayer.pause() : twitchPlayer.play(); return; }
+  if (media === 'radio' && radio.station) { radio.playing ? audio.pause() : audio.play().catch(() => {}); return; }
+  if (media === 'none' && current()) { loadCurrent(); }
+}
+function applyMute() {
+  try { if (playerReady) muted ? player.mute() : player.unMute(); } catch {}
+  try { if (twitchPlayer) twitchPlayer.setMuted(muted); } catch {}
+  audio.muted = muted;
+  osdVolume();
+}
+function applyVolume() {
+  try { if (playerReady) player.setVolume(volume); } catch {}
+  try { if (twitchPlayer) twitchPlayer.setVolume(volume / 100); } catch {}
+  audio.volume = volume / 100;
+  if (muted && volume > 0) { muted = false; applyMute(); return; }
+  osdVolume();
+}
+function retryMedia() {
+  if (media === 'youtube') { try { player.playVideo(); } catch {} }
+  else if (media === 'twitch') { try { twitchPlayer && twitchPlayer.play(); } catch {} }
+  else if (media === 'radio') { audio.play().catch(() => {}); }
+  el.tapToPlay.hidden = true;
+}
+
+// ---- youtube -------------------------------------------------------------------
 function ensurePlayer() {
   if (playerPromise) return playerPromise;
   playerPromise = new Promise((resolve) => {
@@ -149,7 +408,7 @@ function ensurePlayer() {
         width: '100%', height: '100%',
         playerVars: { playsinline: 1, controls: 0, rel: 0, modestbranding: 1, iv_load_policy: 3, fs: 0, disablekb: 1, origin: location.origin },
         events: {
-          onReady: () => { playerReady = true; try { volume = player.getVolume(); muted = player.isMuted(); } catch {} resolve(player); },
+          onReady: () => { playerReady = true; try { if (!IS_IOS) volume = player.getVolume(); } catch {} resolve(player); },
           onStateChange: onPlayerState,
           onError: onPlayerError,
         },
@@ -163,85 +422,129 @@ function ensurePlayer() {
   });
   return playerPromise;
 }
-
 function onPlayerState(e) {
-  if (playback === 'idle' || !current()) return; // events after stopVideo() are noise
+  if (playback === 'idle' || !current() || media !== 'youtube') return;
   const S = YT.PlayerState;
   switch (e.data) {
-    case S.PLAYING:
-      playback = 'playing'; el.tapToPlay.hidden = true; clearTimeout(timers.autoplay);
-      showNow(); break;
-    case S.PAUSED:
-      playback = 'paused'; showNow(true); break;
-    case S.BUFFERING:
-      playback = 'buffering'; break;
-    case S.ENDED:
-      apply(reduce(q, { type: 'ended' })); break;
-    case S.CUED:
-      // cued but not playing: usually means autoplay was refused
-      if (playback === 'loading') { try { player.playVideo(); } catch {} }
-      break;
+    case S.PLAYING: playback = 'playing'; el.tapToPlay.hidden = true; clearTimeout(timers.autoplay); if (screen === 'app' && app === 'youtube') showNow(); break;
+    case S.PAUSED: playback = 'paused'; if (screen === 'app' && app === 'youtube') showNow(true); break;
+    case S.BUFFERING: playback = 'buffering'; break;
+    case S.ENDED: apply(reduce(q, { type: 'ended' })); break;
+    case S.CUED: if (playback === 'loading') { try { player.playVideo(); } catch {} } break;
     default: break;
   }
-  sendState();
+  renderHome(); renderClockChip(); sendState();
 }
-function onPlayerError(e) {
+function onPlayerError() {
   const v = current();
   toast(`„${v ? v.title : 'Video'}“ lässt sich hier nicht abspielen`);
   after('skip', 1800, () => apply(reduce(q, { type: 'next' })));
 }
 function watchAutoplay() {
   after('autoplay', 3200, () => {
-    if (playback === 'loading' || playback === 'blocked') {
+    if (media === 'youtube' && (playback === 'loading' || playback === 'blocked')) {
       playback = 'blocked';
-      const v = current();
-      el.tapTitle.textContent = v ? v.title : '';
-      el.tapToPlay.hidden = false;
+      const v = current(); el.tapTitle.textContent = v ? v.title : ''; el.tapToPlay.hidden = false;
       sendState();
     }
   });
 }
-
-// ---- queue → player ----------------------------------------------------------
+function seekBy(by) {
+  let to = pos + by; to = Math.max(0, dur ? Math.min(to, dur - 0.5) : to);
+  player.seekTo(to, true); pos = to;
+  osdCenter(by < 0 ? 'back' : 'fwd', `${Math.abs(by)} s`);
+  showNow(playback === 'paused'); renderProgress();
+}
+function loadCurrent() {
+  const v = current();
+  if (!v) return;
+  if (media !== 'none' && media !== 'youtube') stopMedia(media);
+  media = 'youtube';
+  currentKey = `${q.index}:${v.id}`;
+  playback = 'loading'; pos = 0; dur = v.duration || 0;
+  if (!(screen === 'app' && app === 'youtube')) setScreen('app', 'youtube');
+  el.ytEmpty.hidden = true; el.tapToPlay.hidden = true;
+  showNow(true);
+  ensurePlayer().then(() => { player.loadVideoById({ videoId: v.id, startSeconds: v.start || 0 }); watchAutoplay(); });
+  renderQueue(); renderHome();
+}
 function apply(next) {
   const before = current();
   const restart = !!next.restart;
   q = { queue: next.queue, index: next.index };
   const v = current();
-  if (!v) { stopPlayback(); broadcast(); return; }
-  const key = `${q.index}:${v.id}`;
-  if (key === currentKey && !restart) { renderNow(); renderQueue(); sendState(); return; }
-  if (key === currentKey && restart) {
-    try { player.seekTo(0, true); player.playVideo(); } catch {}
-    osdCenter('back', 'Von vorn'); sendState(); return;
+  if (!v) {
+    stopMedia('youtube');
+    el.ytEmpty.hidden = false;
+    if (q.queue.length) toast('Warteschlange durchgespielt');
+    renderQueue(); sendState(); return;
   }
-  currentKey = key;
-  playback = 'loading'; pos = 0; dur = v.duration || 0;
-  setState('play'); el.status.classList.remove('fade');
-  el.tapToPlay.hidden = true;
-  showNow(true);
-  ensurePlayer().then(() => {
-    player.loadVideoById({ videoId: v.id, startSeconds: v.start || 0 });
-    watchAutoplay();
-  });
+  const key = `${q.index}:${v.id}`;
+  if (key === currentKey && media === 'youtube' && !restart) { renderNow(); renderQueue(); sendState(); return; }
+  if (key === currentKey && media === 'youtube' && restart) { try { player.seekTo(0, true); player.playVideo(); } catch {} osdCenter('back', 'Von vorn'); sendState(); return; }
+  loadCurrent();
   if (before && before.id !== v.id) toast(`Jetzt: ${v.title}`);
-  renderQueue();
   sendState();
 }
-function stopPlayback() {
-  currentKey = null; playback = 'idle'; pos = 0; dur = 0;
-  clearTimeout(timers.autoplay);
-  try { if (playerReady) player.stopVideo(); } catch {}
-  el.now.classList.remove('show'); el.tapToPlay.hidden = true;
-  setState(booted ? 'idle' : 'boot');
-  updateIdle(); renderQueue();
+
+// ---- now playing / OSD / queue panel (youtube) --------------------------------
+function renderNow() {
+  const v = current(); if (!v) return;
+  el.nowThumb.src = v.thumb; el.nowTitle.textContent = v.title; el.nowChannel.textContent = v.channel;
+  const n = upcoming(); el.nowNext.hidden = !n; if (n) el.nowNextTitle.textContent = n.title;
+  el.ambientArt.src = v.thumb; tv.classList.add('has-art');
+}
+function renderProgress() {
+  el.nowFill.style.width = dur ? (pos / dur * 100).toFixed(2) + '%' : '0%';
+  el.nowPos.textContent = formatTime(pos); el.nowDur.textContent = formatTime(dur);
+}
+function showNow(sticky = false) {
+  renderNow(); renderProgress();
+  el.now.classList.add('show');
+  clearTimeout(timers.now);
+  if (!sticky) after('now', 4200, () => el.now.classList.remove('show'));
+}
+function osdCenter(icon, label = '') {
+  el.osdCenterIcon.setAttribute('href', '#i-' + icon); el.osdCenterLabel.textContent = label;
+  el.osdCenter.classList.remove('show'); void el.osdCenter.offsetWidth; el.osdCenter.classList.add('show');
+}
+function osdVolume() {
+  if (screen !== 'app') return;
+  el.osdVolIcon.setAttribute('href', muted ? '#i-mute' : '#i-vol');
+  el.osdVolFill.style.height = (muted ? 0 : volume) + '%';
+  el.osdVolLabel.textContent = muted ? 'Stumm' : (IS_IOS ? 'Ton an' : String(volume));
+  el.osdVolume.classList.add('show');
+  after('vol', 1600, () => el.osdVolume.classList.remove('show'));
+}
+function renderQueue() {
+  el.queueList.innerHTML = '';
+  if (!q.queue.length) { const li = document.createElement('li'); li.className = 'empty'; li.textContent = 'Noch nichts in der Warteschlange.'; el.queueList.appendChild(li); return; }
+  const from = Math.max(0, Math.min(q.index - 1, q.queue.length - 8));
+  q.queue.slice(from, from + 8).forEach((v, k) => {
+    const i = from + k;
+    const li = document.createElement('li');
+    li.className = i === q.index ? 'current' : (q.index >= 0 && i < q.index ? 'done' : '');
+    li.innerHTML = `<span class="n">${i + 1}</span><img alt=""><div><div class="t"></div><div class="c"></div></div>`;
+    li.querySelector('img').src = v.thumb; li.querySelector('.t').textContent = v.title; li.querySelector('.c').textContent = v.channel;
+    el.queueList.appendChild(li);
+  });
+}
+function showPanel(show, quiet = false) {
+  panelOpen = show; renderQueue();
+  el.queuePanel.classList.toggle('show', show);
+  if (show) after('panel', 9000, () => { panelOpen = false; el.queuePanel.classList.remove('show'); sendState(); });
+  else if (!quiet) clearTimeout(timers.panel);
 }
 
 // ---- messages ------------------------------------------------------------------
 function stateMessage() {
   return {
-    t: 'state', code, queue: q.queue, index: q.index, playback, pos, dur, volume, muted,
-    volumeControl: !IS_IOS, panel: panelOpen, booted,
+    t: 'state', code, booted, screen, app: screen === 'app' ? app : 'home', media,
+    apps: apps.map((a) => ({ id: a.id, name: a.name, hidden: !!a.hidden })),
+    focus: { home: focusHome, radio: focusRadio },
+    queue: q.queue, index: q.index, playback, pos, dur, volume, muted, volumeControl: !IS_IOS, panel: panelOpen,
+    twitch: { channel: twitch.channel, playing: twitch.playing, online: twitch.online },
+    radio: { station: radio.station ? radio.station.id : null, playing: radio.playing, buffering: radio.buffering, error: radio.error },
   };
 }
 let lastSent = 0;
@@ -251,61 +554,54 @@ function sendState(conn) {
   lastSent = Date.now();
   for (const c of conns) { try { c.send(msg); } catch {} }
 }
-const broadcast = () => sendState();
 
 function handleMessage(conn, msg) {
   if (!msg || typeof msg !== 'object') return;
-  if (msg.t === 'hello') {
-    conn.label = String(msg.name || 'Handy').slice(0, 40);
-    setStatus('ok', `Verbunden mit ${conn.label}`);
-    sendState(conn); return;
-  }
+  if (msg.t === 'hello') { setStatus('ok', 'Handy verbunden'); sendState(conn); return; }
   if (msg.t === 'ping') { try { conn.send({ t: 'pong' }); } catch {} return; }
   if (msg.t !== 'cmd') return;
   if (!booted) { try { conn.send({ t: 'needsBoot' }); } catch {} }
-  const ready = playerReady && current();
+  const ytReady = playerReady && current() && media === 'youtube';
   switch (msg.cmd) {
-    case 'toggle':
-      if (!ready) break;
-      if (playback === 'playing' || playback === 'buffering') { player.pauseVideo(); osdCenter('pause'); }
-      else { player.playVideo(); osdCenter('play'); }
-      break;
-    case 'play': if (ready) { player.playVideo(); osdCenter('play'); } break;
-    case 'pause': if (ready) { player.pauseVideo(); osdCenter('pause'); } break;
+    case 'nav': nav(String(msg.dir)); return;
+    case 'select': select(); return;
+    case 'back': back(); return;
+    case 'home': goHome(); return;
+    case 'open': openApp(String(msg.app)); return;
+    case 'apps': {
+      apps = applyAppConfig(APPS, { order: msg.order, hidden: msg.hidden });
+      saveJSON('couchkanal.apps', { order: apps.map((a) => a.id), hidden: apps.filter((a) => a.hidden).map((a) => a.id) });
+      focusHome = 0; renderHome(); toast('Apps angepasst'); break;
+    }
+    case 'toggle': toggleMedia(); break;
+    case 'play': if (ytReady) { player.playVideo(); osdCenter('play'); } else toggleMedia(); break;
+    case 'pause': if (ytReady) { player.pauseVideo(); osdCenter('pause'); } else if (media === 'twitch' && twitchPlayer) twitchPlayer.pause(); else if (media === 'radio') audio.pause(); break;
     case 'seek': {
-      if (!ready) break;
-      let to = typeof msg.to === 'number' ? msg.to : pos + (Number(msg.by) || 0);
-      to = Math.max(0, dur ? Math.min(to, dur - 0.5) : to);
-      player.seekTo(to, true); pos = to;
-      if (typeof msg.by === 'number') osdCenter(msg.by < 0 ? 'back' : 'fwd', `${Math.abs(msg.by)} s`);
-      showNow(playback === 'paused'); renderProgress();
+      if (!ytReady) break;
+      if (typeof msg.to === 'number') { const to = Math.max(0, dur ? Math.min(msg.to, dur - 0.5) : msg.to); player.seekTo(to, true); pos = to; showNow(playback === 'paused'); renderProgress(); }
+      else seekBy(Number(msg.by) || 0);
       break;
     }
     case 'next': apply(reduce(q, { type: 'next' })); if (current()) osdCenter('next'); break;
     case 'prev': apply(reduce(q, { type: 'prev', pos })); break;
     case 'enqueue': {
       const v = sanitizeVideo(msg.video); if (!v) break;
-      const wasIdle = q.index < 0;
-      apply(reduce(q, { type: 'enqueue', video: v }));
-      if (!wasIdle) { toast(`Angehängt: ${v.title}`); renderNow(); }
+      const wasIdle = q.index < 0 || media !== 'youtube';
+      const next = reduce(q, { type: 'enqueue', video: v });
+      if (wasIdle) { q = { queue: next.queue, index: q.index < 0 ? next.index : q.index }; if (media !== 'youtube') { q.index = q.index < 0 ? next.index : q.index; loadCurrent(); } }
+      else { q = { queue: next.queue, index: next.index }; toast(`Angehängt: ${v.title}`); renderNow(); renderQueue(); }
       break;
     }
     case 'playNow': { const v = sanitizeVideo(msg.video); if (v) apply(reduce(q, { type: 'playNow', video: v })); break; }
     case 'jump': apply(reduce(q, { type: 'jump', index: msg.index })); break;
     case 'remove': apply(reduce(q, { type: 'remove', index: msg.index })); toast('Aus der Warteschlange entfernt'); break;
     case 'clear': apply(reduce(q, { type: 'clear' })); toast('Warteschlange geleert'); break;
-    case 'volume': {
-      if (!playerReady) break;
-      volume = Math.max(0, Math.min(100, Math.round(Number(msg.value) || 0)));
-      player.setVolume(volume); if (muted && volume > 0) { muted = false; player.unMute(); }
-      osdVolume(); break;
-    }
-    case 'mute': {
-      if (!playerReady) break;
-      muted = !!msg.muted; muted ? player.mute() : player.unMute();
-      osdVolume(); break;
-    }
-    case 'panel': showPanel(!!msg.show); break;
+    case 'volume': volume = Math.max(0, Math.min(100, Math.round(Number(msg.value) || 0))); applyVolume(); break;
+    case 'mute': muted = !!msg.muted; applyMute(); break;
+    case 'panel': if (screen === 'app' && app === 'youtube') showPanel(!!msg.show); break;
+    case 'twitch': openChannel(msg.channel); break;
+    case 'radio': { const s = stationById(String(msg.station)); if (s) { focusRadio = STATIONS.indexOf(s); if (!(screen === 'app' && app === 'radio')) setScreen('app', 'radio'); playStation(s); } break; }
+    case 'stop': if (media !== 'none') { stopMedia(media); if (screen === 'app' && app === 'youtube') el.ytEmpty.hidden = false; if (screen === 'app' && app === 'radio') renderRadio(); } break;
     default: break;
   }
   sendState();
@@ -322,21 +618,21 @@ function startPeer() {
   peer.on('open', () => {
     idRetries = 0;
     try { localStorage.setItem('couchkanal.code', code); } catch {}
-    renderCode(code, true);
-    setStatus(conns.size ? 'ok' : 'wait', conns.size ? 'Handy verbunden' : 'Warte auf das Handy');
+    renderCode(code, true); renderQR();
+    setStatus(connected() ? 'ok' : 'wait', connected() ? 'Handy verbunden' : `Warte auf das Handy · Code ${code}`);
   });
   peer.on('connection', (conn) => {
     conn.on('open', () => {
       conns.add(conn);
-      setStatus('ok', 'Handy verbunden');
-      updateIdle(); sendState(conn);
+      setStatus('ok', `Handy verbunden · Code ${code}`);
+      renderHome(); sendState(conn);
       if (conns.size === 1) toast('Fernbedienung verbunden');
     });
     conn.on('data', (msg) => handleMessage(conn, msg));
     conn.on('close', () => {
       conns.delete(conn);
-      if (!conns.size) { setStatus('wait', 'Handy getrennt. Der Code bleibt gültig'); el.status.classList.remove('fade'); }
-      updateIdle();
+      if (!connected()) setStatus('wait', `Handy getrennt · Code ${code} bleibt gültig`);
+      renderHome();
     });
     conn.on('error', () => {});
   });
@@ -346,7 +642,6 @@ function startPeer() {
   });
   peer.on('error', (err) => {
     if (err.type === 'unavailable-id') {
-      // after a quick reload the old registration may linger a few seconds: retry the same code first
       peer.destroy(); peer = null;
       if (idRetries++ < 3) { after('idRetry', 2500, startPeer); return; }
       try { localStorage.removeItem('couchkanal.code'); } catch {}
@@ -361,23 +656,41 @@ function startPeer() {
   });
 }
 
-// ---- boot & loops ------------------------------------------------------------
+// ---- boot & input ------------------------------------------------------------
+function silentWav() {
+  // 44-byte header + 2 silent samples, enough to unlock the audio element inside the tap
+  const b = new Uint8Array(48);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) b[o + i] = s.charCodeAt(i); };
+  const u32 = (o, v) => { b[o] = v & 255; b[o + 1] = (v >> 8) & 255; b[o + 2] = (v >> 16) & 255; b[o + 3] = (v >> 24) & 255; };
+  const u16 = (o, v) => { b[o] = v & 255; b[o + 1] = (v >> 8) & 255; };
+  w(0, 'RIFF'); u32(4, 40); w(8, 'WAVE'); w(12, 'fmt '); u32(16, 16); u16(20, 1); u16(22, 1); u32(24, 8000); u32(28, 16000); u16(32, 2); u16(34, 16); w(36, 'data'); u32(40, 4);
+  let s = ''; for (const x of b) s += String.fromCharCode(x);
+  return 'data:audio/wav;base64,' + btoa(s);
+}
 async function boot() {
   if (booted) return;
   booted = true;
-  setState('idle'); updateIdle();
+  try { audio.src = silentWav(); await audio.play(); audio.pause(); audio.removeAttribute('src'); audio.load(); } catch {}
+  setScreen('home');
   try { await ensurePlayer(); } catch {}
   try { navigator.wakeLock && (await navigator.wakeLock.request('screen')); } catch {}
   sendState();
 }
 el.boot.addEventListener('pointerdown', boot);
-el.boot.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') boot(); });
-el.tapToPlay.addEventListener('pointerdown', () => { try { player.playVideo(); } catch {} });
+el.tapToPlay.addEventListener('pointerdown', retryMedia);
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible' && booted) { try { navigator.wakeLock && (await navigator.wakeLock.request('screen')); } catch {} }
 });
+document.addEventListener('keydown', (e) => {
+  if (!booted) { if (e.key === 'Enter' || e.key === ' ') boot(); return; }
+  const map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
+  if (map[e.key]) { nav(map[e.key]); e.preventDefault(); }
+  else if (e.key === 'Enter') select();
+  else if (e.key === 'Escape' || e.key === 'Backspace') back();
+  else if (e.key === 'h' || e.key === 'H') goHome();
+  else if (e.key === ' ') { toggleMedia(); e.preventDefault(); }
+});
 
-// hide the mouse cursor when nothing moves (irrelevant on the iPad, nice on a Mac)
 let cursorTimer;
 document.addEventListener('mousemove', () => {
   tv.classList.remove('hide-cursor');
@@ -385,7 +698,7 @@ document.addEventListener('mousemove', () => {
 });
 
 setInterval(() => {
-  if (!playerReady || !current()) return;
+  if (!playerReady || !current() || media !== 'youtube') return;
   try {
     const p = player.getCurrentTime(), d = player.getDuration();
     if (Number.isFinite(p)) pos = p;
@@ -397,4 +710,5 @@ setInterval(() => {
 
 tickClock(); setInterval(tickClock, 10_000);
 renderCode('····', false);
+renderHome();
 startPeer();

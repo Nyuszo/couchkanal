@@ -167,3 +167,41 @@ test('sanitizeVideo only accepts real ids and never trusts a thumbnail url', asy
   assert.equal(v.duration, 0);
   assert.equal(sanitizeVideo({ id: 'dQw4w9WgXcQ' }).title, 'YouTube-Video');
 });
+
+test('applyAppConfig orders, hides and never hides everything', async () => {
+  const { APPS, applyAppConfig, visibleApps } = await import('../logic.js');
+  const def = applyAppConfig(APPS, null);
+  assert.deepEqual(def.map((a) => a.id), ['youtube', 'twitch', 'radio', 'clock']);
+  assert.ok(def.every((a) => a.hidden === false));
+  const custom = applyAppConfig(APPS, { order: ['radio', 'bogus', 'youtube'], hidden: ['twitch', 'bogus'] });
+  assert.deepEqual(custom.map((a) => a.id), ['radio', 'youtube', 'twitch', 'clock']);
+  assert.deepEqual(visibleApps(custom).map((a) => a.id), ['radio', 'youtube', 'clock']);
+  const all = applyAppConfig(APPS, { hidden: ['youtube', 'twitch', 'radio', 'clock'] });
+  assert.equal(visibleApps(all).length, 4, 'hiding every app falls back to showing all');
+});
+
+test('moveFocus walks a grid without wrapping', async () => {
+  const { moveFocus } = await import('../logic.js');
+  // single row of 4
+  assert.equal(moveFocus(0, 'left', 4), 0);
+  assert.equal(moveFocus(0, 'right', 4), 1);
+  assert.equal(moveFocus(3, 'right', 4), 3);
+  assert.equal(moveFocus(2, 'up', 4), 2);
+  // 4 columns, 10 items (last row has 2)
+  assert.equal(moveFocus(3, 'right', 10, 4), 3, 'end of row stays');
+  assert.equal(moveFocus(4, 'left', 10, 4), 4, 'start of row stays');
+  assert.equal(moveFocus(1, 'down', 10, 4), 5);
+  assert.equal(moveFocus(7, 'down', 10, 4), 9, 'down into a shorter row lands on its last item');
+  assert.equal(moveFocus(9, 'down', 10, 4), 9);
+  assert.equal(moveFocus(9, 'up', 10, 4), 5);
+  assert.equal(moveFocus(-3, 'up', 10, 4), 0, 'out of range index is clamped');
+  assert.equal(moveFocus(0, 'up', 0), -1);
+});
+
+test('stations have unique ids and https streams', async () => {
+  const { STATIONS, stationById } = await import('../logic.js');
+  assert.equal(new Set(STATIONS.map((s) => s.id)).size, STATIONS.length);
+  assert.ok(STATIONS.every((s) => s.url.startsWith('https://')));
+  assert.equal(stationById('swr3').name, 'SWR3');
+  assert.equal(stationById('nope'), null);
+});

@@ -1,12 +1,15 @@
 /* Couchkanal — shared tokens.
    Palette: a blue-black night room lit by one warm tungsten lamp (the amber),
-   with a cool mint reserved for "connected". Single dark theme on purpose:
-   this lives on a TV in a dim room and on a phone next to it. */
+   a cool window light opposite, and a mint reserved for "connected".
+   Single dark theme on purpose: this lives on a TV in a dim room and on a
+   phone next to it. Shadows carry the room's own blue-black, never pure black. */
 :root {
   --night: #0d1322;
   --night-2: #161e34;
   --night-3: #202b47;
+  --night-4: #2a3758;
   --line: rgba(243, 239, 230, 0.09);
+  --edge: rgba(255, 255, 255, 0.10);
   --paper: #f3efe6;
   --paper-dim: #a3abc0;
   --paper-faint: #646d85;
@@ -15,12 +18,14 @@
   --glow-ink: #1d1300;
   --ok: #67d4a8;
   --warn: #ff7a6b;
+  --shade: 5, 8, 20;
   --font-display: "Bricolage Grotesque", "Avenir Next", "Helvetica Neue", system-ui, sans-serif;
   --font-ui: "Instrument Sans", "Helvetica Neue", system-ui, -apple-system, sans-serif;
-  --radius: 18px;
-  --radius-sm: 10px;
+  --radius: 20px;
+  --radius-sm: 12px;
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-spring: cubic-bezier(0.2, 0.9, 0.25, 1.3);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   color-scheme: dark;
 }
 
@@ -35,7 +40,7 @@ body {
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
 }
-h1, h2, h3, p, ul { margin: 0; }
+h1, h2, h3, p, ul, ol { margin: 0; }
 ul { padding: 0; list-style: none; }
 button, input { font: inherit; color: inherit; }
 button {
