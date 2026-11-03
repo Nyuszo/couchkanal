@@ -50,6 +50,7 @@
       <div class="touch-ring"><svg class="icon"><use href="#i-touch"/></svg></div>
       <h1>Einmal tippen, dann übernimmt das Handy</h1>
       <p>Der Fernseher startet und zeigt dir den Kopplungscode.</p>
+      <p class="boot-diag" id="bootDiag" hidden></p>
     </div>
   </section>
 
@@ -159,6 +160,21 @@
   <div class="toast" id="toast" role="status"></div>
 </main>
 
+<script>
+// Plain script on purpose: it still runs when the main program cannot start on an old
+// Safari, and then says so on the boot screen instead of ignoring the tap.
+(function () {
+  var shown = false;
+  function show(msg) { var b = document.getElementById('bootDiag'); if (!b) return; b.hidden = false; b.textContent = msg; shown = true; }
+  var ua = navigator.userAgent, m = ua.match(/OS (\d+)_(\d+)/) || ua.match(/Version\/(\d+)\.(\d+)/);
+  var ver = m ? m[1] + '.' + m[2] : '';
+  window.addEventListener('error', function (e) { show('Fehler: ' + (e.message || 'unbekannt') + (ver ? ' · System ' + ver : '')); });
+  window.addEventListener('unhandledrejection', function (e) { var r = e.reason; show('Fehler: ' + ((r && r.message) || r || 'unbekannt')); });
+  setTimeout(function () {
+    if (!window.__couchkanalReady && !shown) show('Das Programm ist nicht gestartet. ' + (ver ? 'System ' + ver + '. ' : '') + 'Couchkanal braucht iPadOS 13.4 oder neuer.');
+  }, 4000);
+})();
+</script>
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script type="module" src="tv.js"></script>

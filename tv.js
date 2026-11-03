@@ -929,19 +929,27 @@ function silentWav() {
   let s = ''; for (const x of b) s += String.fromCharCode(x);
   return 'data:audio/wav;base64,' + btoa(s);
 }
+function unlockAudio() {
+  // runs inside the tap so iOS counts it as the user's permission for sound; nothing waits on it
+  try {
+    audio.src = silentWav();
+    const p = audio.play();
+    if (p && p.then) p.then(() => { audio.pause(); audio.removeAttribute('src'); audio.load(); }).catch(() => {});
+  } catch {}
+}
 async function boot() {
   if (booted) return;
   booted = true;
-  try { audio.src = silentWav(); await audio.play(); audio.pause(); audio.removeAttribute('src'); audio.load(); } catch {}
   setScreen('home');
-  try { await ensurePlayer(); } catch {}
-  try { navigator.wakeLock && (await navigator.wakeLock.request('screen')); } catch {}
   sendState();
+  unlockAudio();
+  ensurePlayer().catch(() => {});
+  try { navigator.wakeLock && (await navigator.wakeLock.request('screen')); } catch {}
 }
-el.boot.addEventListener('pointerdown', boot);
+el.boot.addEventListener('click', boot);
 // coming back from a website opened in this tab: skip the tap, the home screen was already running
 try { if (sessionStorage.getItem('couchkanal.resume') === '1') { sessionStorage.removeItem('couchkanal.resume'); booted = true; setScreen('home'); ensurePlayer().catch(() => {}); } } catch {}
-el.tapToPlay.addEventListener('pointerdown', retryMedia);
+el.tapToPlay.addEventListener('click', retryMedia);
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible' && booted) { try { navigator.wakeLock && (await navigator.wakeLock.request('screen')); } catch {} }
 });
@@ -976,3 +984,4 @@ tickClock(); setInterval(tickClock, 10_000);
 renderCode('····', false);
 renderHome();
 startPeer();
+window.__couchkanalReady = true;

@@ -553,3 +553,4 @@ html, body { overflow: hidden; }
 .web-empty strong { color: var(--paper); font-weight: 600; }
 #tv[data-state="app"][data-app="web"] .status { top: auto; bottom: 4.5vh; }
 #tv[data-state="app"][data-app="web"] .now { display: none; }
+.boot-diag { color: var(--warn); font-size: 1em; max-width: 52ch; text-wrap: balance; }

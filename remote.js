@@ -506,7 +506,7 @@ function renderBoxes() {
 el.codeInput.addEventListener('input', () => {
   el.codeInput.value = el.codeInput.value.replace(/\D/g, '').slice(0, 4);
   renderBoxes();
-  if (el.codeInput.value.length === 4) el.pairForm.requestSubmit();
+  if (el.codeInput.value.length === 4) { if (el.pairForm.requestSubmit) el.pairForm.requestSubmit(); else el.pairForm.dispatchEvent(new Event('submit', { cancelable: true })); }
 });
 el.codeInput.addEventListener('focus', renderBoxes);
 el.codeInput.addEventListener('blur', renderBoxes);
