@@ -245,3 +245,21 @@ test('launchers can be renamed, re-pointed, added and never accept unsafe urls',
   assert.equal(launchTarget(web), 'https://example.org/tv');
   assert.equal(launchTarget({ kind: 'app' }), '');
 });
+
+test('websites typed on the phone are normalised and remembered', async () => {
+  const { normalizeWebUrl, hostLabel, rememberSite } = await import('../logic.js');
+  assert.equal(normalizeWebUrl('wetter.com'), 'https://wetter.com/');
+  assert.equal(normalizeWebUrl(' https://www.ardmediathek.de/live '), 'https://www.ardmediathek.de/live');
+  assert.equal(normalizeWebUrl('nur text'), '');
+  assert.equal(normalizeWebUrl('javascript:alert(1)'), '');
+  assert.equal(normalizeWebUrl('ftp://x.de'), '');
+  assert.equal(normalizeWebUrl(''), '');
+  assert.equal(normalizeWebUrl('localhost:8787/index.html'), 'http://localhost:8787/index.html', 'local test addresses stay http');
+  assert.equal(hostLabel('https://www.tagesschau.de/x'), 'tagesschau.de');
+  let list = rememberSite([], 'tagesschau.de');
+  list = rememberSite(list, 'https://wetter.com');
+  list = rememberSite(list, 'tagesschau.de');
+  assert.deepEqual(list.map((e) => e.host), ['tagesschau.de', 'wetter.com'], 'reopening moves a site to the front without duplicates');
+  assert.equal(rememberSite(list, 'kaputt').length, 2);
+  assert.equal(rememberSite(Array.from({ length: 14 }, (_, i) => ({ url: `https://s${i}.de/`, host: `s${i}.de` })), 'neu.de').length, 12);
+});

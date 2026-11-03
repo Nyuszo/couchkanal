@@ -19,6 +19,7 @@
   <symbol id="l-youtube" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></symbol>
   <symbol id="l-twitch" viewBox="0 0 24 24"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0 1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></symbol>
   <symbol id="l-radio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4"/><path d="M7.05 16.95a7 7 0 0 1 0-9.9l1.41 1.41a5 5 0 0 0 0 7.08zm9.9 0-1.41-1.41a5 5 0 0 0 0-7.08l1.41-1.41a7 7 0 0 1 0 9.9zM4.22 19.78a11 11 0 0 1 0-15.56l1.42 1.42a9 9 0 0 0 0 12.72zm15.56 0-1.42-1.42a9 9 0 0 0 0-12.72l1.42-1.42a11 11 0 0 1 0 15.56z"/></symbol>
+  <symbol id="l-web" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm6.9 6h-2.95a15.7 15.7 0 0 0-1.38-3.56A8.03 8.03 0 0 1 18.9 8zM12 4.04c.83 1.2 1.48 2.53 1.91 3.96h-3.82c.43-1.43 1.08-2.76 1.91-3.96zM4.26 14a8.3 8.3 0 0 1 0-4h3.38a16.5 16.5 0 0 0 0 4H4.26zm.82 2h2.95c.32 1.25.78 2.45 1.38 3.56A7.99 7.99 0 0 1 5.08 16zm2.95-8H5.08a7.99 7.99 0 0 1 4.33-3.56A15.7 15.7 0 0 0 8.03 8zM12 19.96c-.83-1.2-1.48-2.53-1.91-3.96h3.82c-.43 1.43-1.08 2.76-1.91 3.96zM14.34 14H9.66a14.5 14.5 0 0 1 0-4h4.68a14.5 14.5 0 0 1 0 4zm.25 5.56c.6-1.11 1.06-2.31 1.38-3.56h2.95a8.03 8.03 0 0 1-4.33 3.56zM16.36 14a16.5 16.5 0 0 0 0-4h3.38a8.3 8.3 0 0 1 0 4h-3.38z"/></symbol>
   <symbol id="l-clock" viewBox="0 0 24 24"><path d="M12.3 2.2a9.8 9.8 0 1 0 9.5 12.4 8 8 0 0 1-9.5-12.4z"/><path d="M18 3l.9 2.1L21 6l-2.1.9L18 9l-.9-2.1L15 6l2.1-.9z"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
   <symbol id="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></symbol>
@@ -194,6 +195,17 @@
         <button class="icon-btn" id="radioStop" aria-label="Radio stoppen" hidden><svg class="icon"><use href="#i-stop"/></svg></button>
       </div>
       <ul class="stations-list" id="stationList"></ul>
+    </section>
+
+    <!-- website -->
+    <section class="panel" id="panelWeb" hidden>
+      <form class="search-form" id="webForm">
+        <input id="webInput" type="text" placeholder="Adresse, z. B. wetter.com" enterkeyhint="go" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="url">
+        <button class="primary" type="submit">Öffnen</button>
+      </form>
+      <p class="hint" id="webError" hidden></p>
+      <div class="chips" id="webRecent"></div>
+      <p class="hint">Die Seite öffnet sich auf dem iPad im Fenster über Couchkanal, zurück mit „Fertig“ oben links. Zuletzt geöffnete Seiten bleiben hier und auf dem Fernseher als Schnellwahl.</p>
     </section>
 
     <!-- clock -->

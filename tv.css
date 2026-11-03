@@ -543,3 +543,13 @@ html, body { overflow: hidden; }
 }
 .yt-card.skel .t { height: 1.1vw; width: 85%; } .yt-card.skel .c { height: .9vw; width: 50%; }
 @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* websites: recent sites as tiles, same look as stations */
+.app-web { padding: 6vh 6vw 5vh; background: transparent; }
+.sites { margin-top: 3vh; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2vw; }
+.site .s-name { font-size: clamp(16px, 1.75vw, 32px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.site .s-tag { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.web-empty { margin-top: 4vh; max-width: 52ch; color: var(--paper-dim); font-size: 1.2em; }
+.web-empty strong { color: var(--paper); font-weight: 600; }
+#tv[data-state="app"][data-app="web"] .status { top: auto; bottom: 4.5vh; }
+#tv[data-state="app"][data-app="web"] .now { display: none; }

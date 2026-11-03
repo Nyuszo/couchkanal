@@ -31,6 +31,9 @@ Handy aus mit dem Steuerkreuz oder direkt über die App-Leiste auswählst:
 - **Radio**: 16 Sender, vom Deutschlandfunk bis Radio Paradise. Läuft auch weiter,
   wenn du zum Startbildschirm oder in den Bildschirmschoner wechselst.
 - **Bildschirmschoner**: Uhr und Raumlicht.
+- **Webseite**: Beliebige Adresse am Handy eingeben, der Fernseher öffnet sie.
+  Zuletzt geöffnete Seiten liegen als Kacheln auf dem Fernseher und als
+  Schnellwahl am Handy bereit.
 - **Netflix, Prime Video, Disney+, Apple TV, ARD, ZDF, Arte, Joyn, Spotify**:
   Verknüpfungen. Sie öffnen die Webseite des Dienstes. Läuft Couchkanal vom
   Home-Bildschirm des iPads, erscheint die Seite in einem Fenster über der App,

@@ -1,4 +1,4 @@
-import { isValidCode, peerIdFor, parseYouTubeInput, thumbFor, formatTime, APPS, STATIONS, stationById } from './logic.js';
+import { isValidCode, peerIdFor, parseYouTubeInput, thumbFor, formatTime, APPS, STATIONS, stationById, normalizeWebUrl } from './logic.js';
 
 const $ = (s) => document.querySelector(s);
 const root = $('#remote');
@@ -9,7 +9,8 @@ const el = {
   appstrip: $('#appstrip'),
   sysToggleIcon: $('#sysToggleIcon'), sysToggleLabel: $('#sysToggleLabel'), muteBtn: $('#muteBtn'), muteIcon: $('#muteIcon'), muteLabel: $('#muteLabel'),
   volumeRow: $('#volumeRow'), volume: $('#volume'),
-  panels: { home: $('#panelHome'), youtube: $('#panelYoutube'), twitch: $('#panelTwitch'), radio: $('#panelRadio'), clock: $('#panelClock') },
+  panels: { home: $('#panelHome'), youtube: $('#panelYoutube'), twitch: $('#panelTwitch'), radio: $('#panelRadio'), clock: $('#panelClock'), web: $('#panelWeb') },
+  webForm: $('#webForm'), webInput: $('#webInput'), webError: $('#webError'), webRecent: $('#webRecent'),
   nowMini: $('#nowMini'), miniArt: $('#miniArt'), miniImg: $('#miniImg'), miniWord: $('#miniWord'), miniKicker: $('#miniKicker'), miniTitle: $('#miniTitle'), miniPlay: $('#miniPlay'), miniPlayIcon: $('#miniPlayIcon'),
   ytDial: $('#ytDial'), ytBrowseHint: $('#ytBrowseHint'), scrubWrap: document.querySelector('#panelYoutube .scrub'), transport: document.querySelector('#panelYoutube .transport'), addLauncher: $('#addLauncher'),
   hero: $('#hero'), nowCard: $('#nowCard'), nowGlow: $('#nowGlow'), nowThumb: $('#nowThumb'), nowTitle: $('#nowTitle'), nowChannel: $('#nowChannel'), emptyTitle: $('#emptyTitle'), emptyText: $('#emptyText'),
@@ -23,7 +24,7 @@ const el = {
   settings: $('#settings'), appsConfig: $('#appsConfig'), applyApps: $('#applyApps'), apiKeyInput: $('#apiKeyInput'), saveKey: $('#saveKey'), keyStatus: $('#keyStatus'), tvCode: $('#tvCode'), unpair: $('#unpair'),
   toast: $('#toast'),
 };
-const CHIP_COLORS = { youtube: '#ff0000', twitch: '#a970ff', radio: '#ffb454', clock: '#8f9bff', netflix: '#e50914', prime: '#00a8e1', disney: '#6b8cff', appletv: '#c7c7cc', spotify: '#1ed760', ard: '#6b8cff', zdf: '#f27e1a', arte: '#ff5200', joyn: '#00d4c8' };
+const CHIP_COLORS = { youtube: '#ff0000', twitch: '#a970ff', radio: '#ffb454', clock: '#8f9bff', web: '#5aa0ff', netflix: '#e50914', prime: '#00a8e1', disney: '#6b8cff', appletv: '#c7c7cc', spotify: '#1ed760', ard: '#6b8cff', zdf: '#f27e1a', arte: '#ff5200', joyn: '#00d4c8' };
 
 const LS = { code: 'couchkanal.remote.code', key: 'couchkanal.apikey', twFavs: 'couchkanal.twitch.favs' };
 const store = {
@@ -172,7 +173,19 @@ function render() {
   renderTwitch();
   renderRadio();
   renderMini(playing);
+  renderWeb();
   renderTimes();
+}
+function renderWeb() {
+  const list = (tv.web && Array.isArray(tv.web.recent)) ? tv.web.recent : [];
+  const key = list.map((e) => e.url).join('|');
+  if (el.webRecent.dataset.key === key) return;
+  el.webRecent.dataset.key = key; el.webRecent.innerHTML = '';
+  list.forEach((e) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip-btn'; b.textContent = e.host;
+    b.addEventListener('click', () => { cmd('web', { url: e.url }); toast(`Öffne ${e.host} auf dem iPad`); });
+    el.webRecent.appendChild(b);
+  });
 }
 function renderMini(playing) {
   const m = tv.media;
@@ -556,6 +569,14 @@ el.clearQueue.addEventListener('click', () => {
   clearArmed = false; el.clearQueue.classList.remove('confirm'); el.clearQueue.lastChild.textContent = 'Leeren'; cmd('clear');
 });
 el.twForm.addEventListener('submit', (e) => { e.preventDefault(); openTwitch(el.twInput.value); });
+el.webForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const clean = normalizeWebUrl(el.webInput.value);
+  if (!clean) { el.webError.textContent = 'Das sieht nicht nach einer Webadresse aus. Beispiel: wetter.com'; el.webError.className = 'hint error'; el.webError.hidden = false; return; }
+  el.webError.hidden = true;
+  cmd('web', { url: clean }); el.webInput.value = ''; el.webInput.blur();
+  toast(`Öffne ${clean.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')} auf dem iPad`);
+});
 el.radioStop.addEventListener('click', () => cmd('stop'));
 
 // ---- start ---------------------------------------------------------------------------

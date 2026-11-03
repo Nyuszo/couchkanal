@@ -148,6 +148,7 @@ export const APPS = [
   { id: 'twitch', name: 'Twitch', kind: 'app', blurb: 'Live-Streams. Den Kanalnamen gibst du am Handy ein.' },
   { id: 'radio', name: 'Radio', kind: 'app', blurb: 'Sechzehn Sender, vom Deutschlandfunk bis Radio Paradise.' },
   { id: 'clock', name: 'Bildschirmschoner', kind: 'app', blurb: 'Uhr und Raumlicht. Radio läuft dabei weiter.' },
+  { id: 'web', name: 'Webseite', kind: 'app', blurb: 'Eine beliebige Adresse vom Handy aus öffnen. Zuletzt besuchte Seiten liegen hier bereit.' },
   { id: 'netflix', name: 'Netflix', kind: 'launch', mode: 'app', web: 'https://www.netflix.com/browse', url: 'nflx://', blurb: 'Startet die Netflix-App auf dem iPad, im Vollbild wie beim Apple TV. Zurück über die Home-Taste.' },
   { id: 'prime', name: 'Prime Video', kind: 'launch', mode: 'app', web: 'https://www.primevideo.com', url: 'aiv://', blurb: 'Startet die Prime-Video-App auf dem iPad. Zurück über die Home-Taste.' },
   { id: 'disney', name: 'Disney+', kind: 'launch', mode: 'app', web: 'https://www.disneyplus.com', url: 'disneyplus://', blurb: 'Startet die Disney+-App auf dem iPad. Adresse ungeprüft, in den Einstellungen änderbar.' },
@@ -250,3 +251,27 @@ export const YT_ROWS = [
   { id: '17', title: 'Sport' },
   { id: '25', title: 'Nachrichten' },
 ];
+
+// ---- Websites typed on the phone ---------------------------------------------
+// "wetter.com" -> "https://wetter.com", keeps full urls, rejects anything that is
+// not a web address. Returns '' when it cannot be opened.
+export function normalizeWebUrl(text) {
+  let t = String(text ?? '').trim();
+  if (!t || /\s/.test(t)) return '';
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(t)) t = (/^(localhost|127\.0\.0\.1)([:/]|$)/i.test(t) ? 'http://' : 'https://') + t;
+  if (!/^https?:\/\//i.test(t)) return '';
+  try {
+    const u = new URL(t);
+    if (!/^[^.]+\.[^.]{2,}/.test(u.hostname) && u.hostname !== 'localhost') return '';
+    return u.href;
+  } catch { return ''; }
+}
+export function hostLabel(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return String(url ?? ''); }
+}
+export function rememberSite(list, url, max = 12) {
+  const clean = normalizeWebUrl(url);
+  if (!clean) return Array.isArray(list) ? list : [];
+  const rest = (Array.isArray(list) ? list : []).filter((e) => e && e.url !== clean);
+  return [{ url: clean, host: hostLabel(clean) }, ...rest].slice(0, max);
+}

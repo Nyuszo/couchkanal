@@ -2,6 +2,7 @@ import {
   makeCode, isValidCode, peerIdFor, formatTime,
   reduce, initialQueue, sanitizeVideo,
   APPS, applyAppConfig, visibleApps, moveFocus, STATIONS, stationById, YT_ROWS, thumbFor, launchTarget,
+  normalizeWebUrl, hostLabel, rememberSite,
 } from './logic.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -12,7 +13,8 @@ const el = {
   code: $('#code'), idleLead: $('#idleLead'), idleHint: $('#idleHint'), qr: $('#qr'),
   shelfApp: $('#shelfApp'), shelfCard: $('#shelfCard'), shelfKicker: $('#shelfKicker'), shelfTitle: $('#shelfTitle'), shelfText: $('#shelfText'), shelfNow: $('#shelfNow'),
   apps: $('#apps'),
-  appScreens: { youtube: $('#appYoutube'), twitch: $('#appTwitch'), radio: $('#appRadio'), clock: $('#appClock') },
+  appScreens: { youtube: $('#appYoutube'), twitch: $('#appTwitch'), radio: $('#appRadio'), clock: $('#appClock'), web: $('#appWeb') },
+  sites: $('#sites'), webHint: $('#webHint'), webEmpty: $('#webEmpty'),
   ytBrowse: $('#ytBrowse'), ytRows: $('#ytRows'), ytHint: $('#ytHint'), twEmpty: $('#twEmpty'), twChip: $('#twChip'), twChipText: $('#twChipText'),
   radioNow: $('#radioNow'), stations: $('#stations'), radioChip: $('#radioChip'), radioChipText: $('#radioChipText'),
   status: $('#status'), statusText: $('#statusText'),
@@ -34,6 +36,7 @@ const TILES = {
   twitch: { bg: 'linear-gradient(160deg, #a970ff, #6d28d9)', fg: '#ffffff' },
   radio: { bg: 'linear-gradient(160deg, #1fb3a3, #0b4f49)', fg: '#ffffff' },
   clock: { bg: 'linear-gradient(160deg, #3b36a8, #1b1850)', fg: '#f3efe6' },
+  web: { bg: 'linear-gradient(160deg, #2b6cb0, #153e75)', fg: '#f3efe6' },
   netflix: { bg: 'linear-gradient(160deg, #1c1c1c, #000000)', fg: '#e50914' },
   prime: { bg: 'linear-gradient(160deg, #1f3a63, #0f1b2f)', fg: '#00a8e1' },
   disney: { bg: 'linear-gradient(160deg, #1b3c8a, #0b1a3a)', fg: '#f3efe6' },
@@ -45,7 +48,7 @@ const TILES = {
   joyn: { bg: 'linear-gradient(160deg, #1a1a1a, #000000)', fg: '#00d4c8' },
   custom: { bg: 'linear-gradient(160deg, #3a4668, #1a2238)', fg: '#f3efe6' },
 };
-const GLOW = { youtube: '#ff3b3b', twitch: '#9146ff', radio: '#1aa092', clock: '#5b57d6', netflix: '#e50914', prime: '#00a8e1', disney: '#2f5fd6', appletv: '#8e8e93', spotify: '#1ed760', ard: '#2f5fd6', zdf: '#f27e1a', arte: '#ff5200', joyn: '#00d4c8' };
+const GLOW = { youtube: '#ff3b3b', twitch: '#9146ff', radio: '#1aa092', clock: '#5b57d6', web: '#2b6cb0', netflix: '#e50914', prime: '#00a8e1', disney: '#2f5fd6', appletv: '#8e8e93', spotify: '#1ed760', ard: '#2f5fd6', zdf: '#f27e1a', arte: '#ff5200', joyn: '#00d4c8' };
 const tileFor = (id) => TILES[id] || TILES.custom;
 
 // ---- state -----------------------------------------------------------------
@@ -71,6 +74,7 @@ const twitch = { channel: '', playing: false, online: null, ready: false };
 const yt = { view: 'browse', key: '', rows: {}, focusRow: 0, focusCol: {}, loading: false, error: '', searchQ: '', searchItems: null, loadedAt: 0 };
 try { yt.key = localStorage.getItem('couchkanal.apikey') || ''; } catch {}
 let launched = '', launchedAt = 0;
+const web = { recent: Array.isArray(loadJSON('couchkanal.web.recent')) ? loadJSON('couchkanal.web.recent') : [], focus: 0 };
 let twitchPlayer = null, twitchPromise = null;
 
 let peer = null, code = null, idRetries = 0;
@@ -116,6 +120,7 @@ function setScreen(next, nextApp) {
   if (screen === 'home') renderHome();
   if (screen === 'app' && app === 'radio') renderRadio();
   if (screen === 'app' && app === 'clock') renderClockChip();
+  if (screen === 'app' && app === 'web') renderWeb();
   if (screen === 'app' && app === 'youtube') { if (current() && playback !== 'idle' && yt.view === 'watch') showNow(playback === 'paused'); renderYt(); } else el.ytBrowse.classList.remove('show');
   if (connected() && (app === 'youtube' || app === 'twitch') && screen === 'app') after('statusFade', 3500, () => el.status.classList.add('fade'));
 }
@@ -166,6 +171,10 @@ function nav(dir) {
     focusRadio = moveFocus(focusRadio, dir, STATIONS.length, 4);
     renderRadio(); sendState(); return;
   }
+  if (screen === 'app' && app === 'web') {
+    web.focus = moveFocus(web.focus, dir, web.recent.length, 4);
+    renderWeb(); sendState(); return;
+  }
   if (screen === 'app' && app === 'youtube') {
     if (yt.view === 'browse') {
       const rows = ytRowsList();
@@ -181,6 +190,7 @@ function nav(dir) {
 function select() {
   if (screen === 'home') { const list = visibleApps(apps); const a = list[focusHome]; if (a) openApp(a.id); return; }
   if (screen === 'app' && app === 'radio') { playStation(STATIONS[focusRadio]); return; }
+  if (screen === 'app' && app === 'web') { const e = web.recent[web.focus]; if (e) openWebsite(e.url); return; }
   if (screen === 'app' && app === 'youtube') {
     if (yt.view === 'browse') { const rows = ytRowsList(); const row = rows[yt.focusRow]; if (row) selectYt(row, Math.min(yt.focusCol[row.id] ?? 0, row.items.length - 1)); return; }
     toggleMedia(); return;
@@ -254,6 +264,14 @@ function shelfCard(a) {
       STATIONS.slice(0, 6).forEach((s) => { const sp = document.createElement('span'); sp.style.setProperty('--hue', s.hue); sp.textContent = s.name; d.appendChild(sp); });
       c.appendChild(d);
     }
+    return;
+  }
+  if (a.id === 'web') {
+    if (web.recent.length) {
+      const d = document.createElement('div'); d.className = 'card-stations';
+      web.recent.slice(0, 6).forEach((e) => { const sp = document.createElement('span'); sp.style.setProperty('--hue', hueFor(e.host)); sp.textContent = e.host; d.appendChild(sp); });
+      c.appendChild(d);
+    } else c.innerHTML = '<div class="card-logo"><svg class="logo"><use href="#l-web"/></svg></div>';
     return;
   }
   if (a.id === 'clock') {
@@ -386,6 +404,46 @@ audio.addEventListener('playing', () => { radio.playing = true; radio.buffering 
 audio.addEventListener('pause', () => { radio.playing = false; renderRadio(); renderHome(); renderClockChip(); sendState(); });
 audio.addEventListener('waiting', () => { radio.buffering = true; renderRadio(); sendState(); });
 audio.addEventListener('error', () => { radio.playing = false; radio.buffering = false; radio.error = 'nicht erreichbar'; renderRadio(); sendState(); });
+
+// ---- websites ------------------------------------------------------------------
+function hueFor(text) { let h = 0; for (const ch of String(text)) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; }
+let lastWebFocus = -1;
+function renderWeb() {
+  const key = web.recent.map((e) => e.url).join('|');
+  if (el.sites.dataset.key !== key) {
+    el.sites.dataset.key = key; el.sites.innerHTML = '';
+    web.recent.forEach((e, i) => {
+      const b = document.createElement('button');
+      b.className = 'station site'; b.style.setProperty('--hue', hueFor(e.host)); b.style.setProperty('--i', i); b.setAttribute('role', 'listitem');
+      b.innerHTML = `<span class="s-name"></span><span class="s-tag"></span>`;
+      b.querySelector('.s-name').textContent = e.host; b.querySelector('.s-tag').textContent = e.url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
+      b.addEventListener('click', () => { web.focus = i; openWebsite(e.url); });
+      el.sites.appendChild(b);
+    });
+    lastWebFocus = -1;
+  }
+  if (web.focus >= web.recent.length) web.focus = Math.max(0, web.recent.length - 1);
+  [...el.sites.children].forEach((b, i) => {
+    b.classList.toggle('focused', i === web.focus);
+    if (i === web.focus && lastWebFocus !== i) { b.classList.remove('glint'); void b.offsetWidth; b.classList.add('glint'); }
+  });
+  lastWebFocus = web.focus;
+  el.webEmpty.hidden = web.recent.length > 0;
+  el.webHint.textContent = web.recent.length ? 'Auswählen mit dem Steuerkreuz oder neue Adresse am Handy eingeben' : 'Gib am Handy eine Adresse ein';
+}
+function openWebsite(url) {
+  const clean = normalizeWebUrl(url);
+  if (!clean) { toast('Das ist keine Webadresse'); return; }
+  web.recent = rememberSite(web.recent, clean); saveJSON('couchkanal.web.recent', web.recent); web.focus = 0;
+  const host = hostLabel(clean);
+  launched = host; launchedAt = Date.now();
+  toast(`Öffne ${host}`);
+  if (screen === 'app' && app === 'web') renderWeb();
+  sendState();
+  try { sessionStorage.setItem('couchkanal.resume', '1'); } catch {}
+  after('launch', 350, () => { try { location.href = clean; } catch {} });
+  after('launchReset', 15000, () => { launched = ''; sendState(); });
+}
 
 // ---- twitch --------------------------------------------------------------------
 function ensureTwitch(channel) {
@@ -740,6 +798,7 @@ function stateMessage() {
     t: 'state', code, booted, screen, app: screen === 'app' ? app : 'home', media,
     apps: apps.map((a) => ({ id: a.id, name: a.name, hidden: !!a.hidden, kind: a.kind, url: a.url || '', web: a.web || '', mode: a.mode || 'web' })),
     yt: { view: yt.view, hasKey: !!yt.key, searchQ: yt.searchQ, error: yt.error },
+    web: { recent: web.recent },
     launched: Date.now() - launchedAt < 15000 ? launched : '',
     focus: { home: focusHome, radio: focusRadio },
     queue: q.queue, index: q.index, playback, pos, dur, volume, muted, volumeControl: !IS_IOS, panel: panelOpen,
@@ -804,6 +863,7 @@ function handleMessage(conn, msg) {
     case 'stop': if (media !== 'none') { stopMedia(media); if (screen === 'app' && app === 'youtube') { yt.view = 'browse'; loadYtRows(); renderYt(); } if (screen === 'app' && app === 'radio') renderRadio(); } break;
     case 'apikey': { const k = String(msg.key || '').trim().slice(0, 80); if (k !== yt.key) { yt.key = k; try { k ? localStorage.setItem('couchkanal.apikey', k) : localStorage.removeItem('couchkanal.apikey'); } catch {} yt.rows = {}; yt.loadedAt = 0; yt.error = ''; if (screen === 'app' && app === 'youtube') { loadYtRows(); renderYt(); } } break; }
     case 'search': ytSearch(String(msg.q || '')); break;
+    case 'web': openWebsite(String(msg.url || '')); break;
     default: break;
   }
   sendState();
