@@ -1,5 +1,10 @@
 # Couchkanal
 
+> **Nur ein Spaßprojekt, und zwar vibe-gecodet.** Entstanden an einem Abend im
+> Gespräch mit Claude, ohne Anspruch auf saubere Architektur oder Vollständigkeit.
+> Es funktioniert fürs Wohnzimmer, mehr will es nicht sein. Nutzung auf eigene
+> Gefahr, Fehler bitte mit Humor nehmen.
+
 Das iPad wird zum Fernseher, das Handy zur Fernbedienung. YouTube-Videos laufen
 auf dem iPad (per HDMI am Fernseher), gesteuert vom Handy: suchen, Warteschlange,
 Play, Pause, springen.
