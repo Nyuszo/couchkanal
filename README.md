@@ -18,11 +18,19 @@ nach etwa einer Minute live.
 Nach dem Start zeigt das iPad einen Startbildschirm mit App-Kacheln, die du vom
 Handy aus mit dem Steuerkreuz oder direkt über die App-Leiste auswählst:
 
-- **YouTube**: Videos per Link oder Suche, Warteschlange, Play, Pause, Springen.
+- **YouTube**: Angesagte Videos, Musik, Gaming, Sport und mehr direkt auf dem
+  Fernseher, Auswahl mit dem Steuerkreuz, Suche vom Handy. Dafür braucht der
+  Fernseher deinen Google-Schlüssel (wird von der Fernbedienung übertragen).
+  Links vom Handy laufen auch ohne Schlüssel.
 - **Twitch**: Kanalnamen am Handy eingeben, der Stream läuft auf dem Fernseher.
 - **Radio**: 16 Sender, vom Deutschlandfunk bis Radio Paradise. Läuft auch weiter,
   wenn du zum Startbildschirm oder in den Bildschirmschoner wechselst.
 - **Bildschirmschoner**: Uhr und Raumlicht.
+- **Netflix, Prime Video, Disney+, Apple TV, Spotify**: Verknüpfungen, die die
+  jeweilige App auf dem iPad öffnen. Die Wiedergabe darin steuert Apples
+  Fernsteuerung („Geräte in der Nähe steuern“), zurück zu Couchkanal geht es
+  über den Home-Bildschirm des iPads. Die Startadressen (z. B. `nflx://`) sind
+  in den Einstellungen änderbar, eigene Verknüpfungen lassen sich hinzufügen.
 
 Reihenfolge und Sichtbarkeit der Kacheln stellst du in den Einstellungen der
 Fernbedienung ein (Zahnrad oben rechts). Netflix und ähnliche Dienste lassen sich

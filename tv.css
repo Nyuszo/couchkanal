@@ -469,3 +469,55 @@ html, body { overflow: hidden; }
 .tw-chip.off .live-dot { background: var(--paper-faint); box-shadow: none; }
 /* on the home screen the status pill lives under the clock, clear of the shelf text */
 #tv[data-state="home"] .status { left: auto; right: 6vw; top: calc(6vh + 5.4em); bottom: auto; }
+
+/* =====================================================================
+   YouTube on the TV: rows of cards, launcher tiles, scrolling app row
+   ===================================================================== */
+.yt-browse {
+  position: absolute; inset: 0; z-index: 3; background: var(--night);
+  padding: 5vh 0 0 6vw; display: grid; grid-template-rows: auto 1fr; gap: 2.4vh; overflow: hidden;
+  opacity: 0; visibility: hidden; transition: opacity .4s ease, visibility 0s linear .4s;
+}
+.yt-browse.show { opacity: 1; visibility: visible; transition: opacity .4s ease; }
+.yt-browse::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 8vh; background: linear-gradient(to top, var(--night), transparent); pointer-events: none; }
+.yt-head { display: flex; align-items: center; gap: 1vw; padding-right: 6vw; }
+.yt-logo { width: 3vw; height: 3vw; fill: #ff0000; }
+.yt-head h2 { font: 700 2.4vw/1 var(--font-display); letter-spacing: -0.03em; }
+.yt-hint { margin-left: auto; color: var(--paper-faint); font-size: 1em; }
+.yt-rows { display: grid; gap: 2vh; align-content: start; transition: transform .5s var(--ease-out); will-change: transform; }
+.yt-row h3 { font: 600 1.35vw/1 var(--font-display); letter-spacing: -0.01em; color: var(--paper-dim); margin: 0 0 .6vh; transition: color .3s; }
+.yt-row.focused h3 { color: var(--paper); }
+.yt-track { display: flex; gap: 1.4vw; padding: .9vw 6vw .9vw 0; transition: transform .45s var(--ease-out); will-change: transform; }
+.yt-card { flex: none; width: 19vw; display: grid; gap: .55vw; text-align: left; color: var(--paper); }
+.yt-card .th {
+  position: relative; aspect-ratio: 16 / 9; border-radius: .9vw; overflow: hidden; background: var(--night-3);
+  box-shadow: 0 .8vw 2vw rgba(var(--shade), .5);
+  transition: transform .35s var(--ease-spring), box-shadow .35s;
+}
+.yt-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.yt-card .dur { position: absolute; right: .5vw; bottom: .5vw; padding: .15em .45em; border-radius: .3vw; background: rgba(13,19,34,.85); font: 600 .85vw/1.3 var(--font-ui); font-variant-numeric: tabular-nums; }
+.yt-card .chip { position: absolute; left: .5vw; top: .5vw; padding: .2em .6em; border-radius: 999px; background: var(--glow); color: var(--glow-ink); font: 700 .8vw/1.3 var(--font-ui); }
+.yt-card.focused .th { transform: scale(1.08); box-shadow: 0 1.6vw 3.6vw rgba(var(--shade), .65), 0 0 0 .26vw rgba(243,239,230,.95); }
+.yt-card .t { font: 600 1.02vw/1.25 var(--font-ui); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.yt-card .c { color: var(--paper-dim); font-size: .9vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yt-card.dim { opacity: .5; }
+.yt-msg { color: var(--paper-faint); font-size: 1em; padding: 1vw 0; }
+.yt-setup {
+  max-width: 58vw; padding: 2vw 2.2vw; border-radius: 1.2vw; display: grid; gap: .7em;
+  background: var(--night-2); box-shadow: inset 0 1px 0 var(--edge), 0 1.5vw 3vw rgba(var(--shade), .5);
+}
+.yt-setup h3 { font: 600 1.7vw/1.15 var(--font-display); letter-spacing: -0.02em; }
+.yt-setup p { color: var(--paper-dim); font-size: 1.05em; max-width: 48ch; }
+.yt-setup ol { margin: 0; padding-left: 1.4em; color: var(--paper-dim); display: grid; gap: .3em; }
+
+/* launcher tiles: wordmarks in brand colours */
+.app-tile .wordmark { font: 800 2.1vw/1 var(--font-display); letter-spacing: -0.03em; color: var(--tile-fg); padding: 0 1vw; text-align: center; text-wrap: balance; filter: drop-shadow(0 .2vw .5vw rgba(0,0,0,.25)); }
+.app-tile[data-app="netflix"] .wordmark { text-transform: uppercase; letter-spacing: .06em; font-size: 1.9vw; }
+.app-tile[data-app="prime"] .wordmark { font-weight: 600; letter-spacing: -0.01em; }
+.app-tile[data-app="spotify"] .wordmark { font-weight: 700; }
+.app-name .tag { font-size: .78em; color: var(--paper-faint); padding: .1em .5em; border-radius: 999px; border: 1px solid var(--line); }
+.apps { transition: transform .5s var(--ease-out); }
+.card-word { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; background: var(--tile-bg); color: var(--tile-fg); font: 800 4vw/1 var(--font-display); letter-spacing: -0.03em; padding: 0 2vw; }
+.card-word.upper { text-transform: uppercase; letter-spacing: .06em; font-size: 3.4vw; }
+.card-word::after { content: ""; position: absolute; inset: 0; background: linear-gradient(165deg, rgba(255,255,255,.14), transparent 42%); pointer-events: none; }
+#tv.browsing .now { display: none; }

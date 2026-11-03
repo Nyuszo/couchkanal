@@ -171,13 +171,14 @@ test('sanitizeVideo only accepts real ids and never trusts a thumbnail url', asy
 test('applyAppConfig orders, hides and never hides everything', async () => {
   const { APPS, applyAppConfig, visibleApps } = await import('../logic.js');
   const def = applyAppConfig(APPS, null);
-  assert.deepEqual(def.map((a) => a.id), ['youtube', 'twitch', 'radio', 'clock']);
+  assert.deepEqual(def.map((a) => a.id), APPS.map((a) => a.id));
+  assert.deepEqual(def.slice(0, 4).map((a) => a.id), ['youtube', 'twitch', 'radio', 'clock']);
   assert.ok(def.every((a) => a.hidden === false));
   const custom = applyAppConfig(APPS, { order: ['radio', 'bogus', 'youtube'], hidden: ['twitch', 'bogus'] });
-  assert.deepEqual(custom.map((a) => a.id), ['radio', 'youtube', 'twitch', 'clock']);
-  assert.deepEqual(visibleApps(custom).map((a) => a.id), ['radio', 'youtube', 'clock']);
-  const all = applyAppConfig(APPS, { hidden: ['youtube', 'twitch', 'radio', 'clock'] });
-  assert.equal(visibleApps(all).length, 4, 'hiding every app falls back to showing all');
+  assert.deepEqual(custom.slice(0, 4).map((a) => a.id), ['radio', 'youtube', 'twitch', 'clock']);
+  assert.deepEqual(visibleApps(custom).slice(0, 3).map((a) => a.id), ['radio', 'youtube', 'clock']);
+  const all = applyAppConfig(APPS, { hidden: APPS.map((a) => a.id) });
+  assert.equal(visibleApps(all).length, APPS.length, 'hiding every app falls back to showing all');
 });
 
 test('moveFocus walks a grid without wrapping', async () => {
@@ -204,4 +205,31 @@ test('stations have unique ids and https streams', async () => {
   assert.ok(STATIONS.every((s) => s.url.startsWith('https://')));
   assert.equal(stationById('swr3').name, 'SWR3');
   assert.equal(stationById('nope'), null);
+});
+
+test('launchers can be renamed, re-pointed, added and never accept unsafe urls', async () => {
+  const { APPS, applyAppConfig, isLaunchUrl } = await import('../logic.js');
+  assert.ok(isLaunchUrl('nflx://'));
+  assert.ok(isLaunchUrl('spotify:'));
+  assert.equal(isLaunchUrl('javascript:alert(1)'), false);
+  assert.equal(isLaunchUrl('no scheme'), false);
+  const cfg = {
+    launchers: [
+      { id: 'disney', name: 'Disney Plus', url: 'disneyplus://home' },
+      { id: 'custom-1', name: 'ARD', url: 'ardmediathek://' },
+      { id: 'custom-2', name: 'Böse', url: 'javascript:alert(1)' },
+      { id: 'youtube', name: 'Nope', url: 'x://' },
+    ],
+    order: ['custom-1', 'youtube'],
+  };
+  const list = applyAppConfig(APPS, cfg);
+  assert.equal(list[0].id, 'custom-1');
+  assert.equal(list[0].kind, 'launch');
+  assert.equal(list[1].id, 'youtube');
+  assert.equal(list[1].name, 'YouTube', 'built-in apps cannot be renamed');
+  const disney = list.find((a) => a.id === 'disney');
+  assert.equal(disney.name, 'Disney Plus');
+  assert.equal(disney.url, 'disneyplus://home');
+  assert.ok(!list.some((a) => a.id === 'custom-2'), 'unsafe custom launcher is dropped');
+  assert.equal(list.length, APPS.length + 1);
 });

@@ -35,6 +35,7 @@
   <symbol id="i-search" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.5 6.5 0 1 0 9.5 16a6.5 6.5 0 0 0 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></symbol>
   <symbol id="i-tv" viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></symbol>
   <symbol id="i-close" viewBox="0 0 24 24"><path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.42L10.59 13.4 4.29 19.7 2.88 18.29 9.17 12 2.88 5.71 4.29 4.29l6.3 6.3 6.3-6.3z"/></symbol>
+  <symbol id="i-open" viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></symbol>
   <symbol id="i-home" viewBox="0 0 24 24"><path d="M12 3 2 12h3v8h6v-6h2v6h6v-8h3L12 3z"/></symbol>
   <symbol id="i-return" viewBox="0 0 24 24"><path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20v-2z"/></symbol>
   <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 8l6 6-1.4 1.4-4.6-4.6-4.6 4.6L6 14z"/></symbol>
@@ -115,6 +116,14 @@
           </div>
         </div>
       </div>
+      <div class="dial compact" id="ytDial" hidden>
+        <button class="dial-btn up" data-dir="up" aria-label="Hoch"><svg class="icon"><use href="#i-up"/></svg></button>
+        <button class="dial-btn left" data-dir="left" aria-label="Links"><svg class="icon"><use href="#i-left"/></svg></button>
+        <button class="dial-ok" aria-label="Auswählen">OK</button>
+        <button class="dial-btn right" data-dir="right" aria-label="Rechts"><svg class="icon"><use href="#i-right"/></svg></button>
+        <button class="dial-btn down" data-dir="down" aria-label="Runter"><svg class="icon"><use href="#i-down"/></svg></button>
+      </div>
+      <p class="hint center" id="ytBrowseHint" hidden>Du stöberst auf dem Fernseher. Suchbegriffe unten eingeben, Ergebnisse erscheinen dort und hier.</p>
       <div class="scrub">
         <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Position">
         <div class="times"><span id="tPos">0:00</span><span id="tDur">0:00</span></div>
@@ -201,6 +210,8 @@
         <h3>Apps auf dem Fernseher</h3>
         <p>Reihenfolge und Sichtbarkeit der Kacheln auf dem Startbildschirm.</p>
         <ul class="apps-config" id="appsConfig"></ul>
+        <p class="hint">Verknüpfungen öffnen eine App auf dem iPad. Die Adresse ist der Startbefehl der App, zum Beispiel <code>nflx://</code> für Netflix.</p>
+        <button class="ghost" type="button" id="addLauncher"><svg class="icon"><use href="#i-plus"/></svg>Verknüpfung hinzufügen</button>
         <button class="primary" type="button" id="applyApps">Auf den Fernseher übernehmen</button>
       </section>
 

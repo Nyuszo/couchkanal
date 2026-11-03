@@ -144,19 +144,44 @@ export function sanitizeVideo(v) {
 
 // ---- Apps (the TV home screen) ---------------------------------------------
 export const APPS = [
-  { id: 'youtube', name: 'YouTube', blurb: 'Videos suchen, anhängen, abspielen. Alles vom Handy aus.' },
-  { id: 'twitch', name: 'Twitch', blurb: 'Live-Streams. Den Kanalnamen gibst du am Handy ein.' },
-  { id: 'radio', name: 'Radio', blurb: 'Sechzehn Sender, vom Deutschlandfunk bis Radio Paradise.' },
-  { id: 'clock', name: 'Bildschirmschoner', blurb: 'Uhr und Raumlicht. Radio läuft dabei weiter.' },
+  { id: 'youtube', name: 'YouTube', kind: 'app', blurb: 'Angesagte Videos, Kategorien und Suche direkt auf dem Fernseher.' },
+  { id: 'twitch', name: 'Twitch', kind: 'app', blurb: 'Live-Streams. Den Kanalnamen gibst du am Handy ein.' },
+  { id: 'radio', name: 'Radio', kind: 'app', blurb: 'Sechzehn Sender, vom Deutschlandfunk bis Radio Paradise.' },
+  { id: 'clock', name: 'Bildschirmschoner', kind: 'app', blurb: 'Uhr und Raumlicht. Radio läuft dabei weiter.' },
+  { id: 'netflix', name: 'Netflix', kind: 'launch', url: 'nflx://', blurb: 'Öffnet die Netflix-App auf dem iPad. Die Wiedergabe darin steuert Apples Fernsteuerung.' },
+  { id: 'prime', name: 'Prime Video', kind: 'launch', url: 'aiv://', blurb: 'Öffnet die Prime-Video-App auf dem iPad.' },
+  { id: 'disney', name: 'Disney+', kind: 'launch', url: 'disneyplus://', blurb: 'Öffnet die Disney+-App auf dem iPad. Adresse ungeprüft, in den Einstellungen änderbar.' },
+  { id: 'appletv', name: 'Apple TV', kind: 'launch', url: 'videos://', blurb: 'Öffnet die Apple-TV-App auf dem iPad.' },
+  { id: 'spotify', name: 'Spotify', kind: 'launch', url: 'spotify:', blurb: 'Öffnet die Spotify-App auf dem iPad.' },
 ];
 
-// Ordered list with a hidden flag, from a saved config {order:[ids], hidden:[ids]}.
-// Unknown ids are dropped, missing ids are appended in default order.
+const SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+export function isLaunchUrl(u) {
+  const s = String(u ?? '').trim();
+  return SCHEME_RE.test(s) && !/^(javascript|data|vbscript|file):/i.test(s);
+}
+
+// Ordered list with a hidden flag, from a saved config
+// {order:[ids], hidden:[ids], launchers:[{id, name, url}]}.
+// Unknown ids are dropped, missing ids are appended in default order. Launcher entries
+// rename or re-point the built-in launchers; ids starting with "custom-" add new ones.
 export function applyAppConfig(defaults, config) {
-  const known = new Map(defaults.map((a) => [a.id, a]));
+  const clip = (v, n) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+  const known = new Map(defaults.map((a) => [a.id, { ...a }]));
+  for (const l of Array.isArray(config?.launchers) ? config.launchers : []) {
+    if (!l || typeof l !== 'object') continue;
+    const id = clip(l.id, 40);
+    if (known.has(id) && known.get(id).kind === 'launch') {
+      const a = known.get(id);
+      if (clip(l.name, 24)) a.name = clip(l.name, 24);
+      if (isLaunchUrl(l.url)) a.url = clip(l.url, 200);
+    } else if (/^custom-[a-z0-9]+$/i.test(id) && clip(l.name, 24) && isLaunchUrl(l.url)) {
+      known.set(id, { id, name: clip(l.name, 24), kind: 'launch', url: clip(l.url, 200), blurb: `Öffnet ${clip(l.name, 24)} auf dem iPad.` });
+    }
+  }
   const order = Array.isArray(config?.order) ? config.order.filter((id) => known.has(id)) : [];
   const hidden = new Set(Array.isArray(config?.hidden) ? config.hidden.filter((id) => known.has(id)) : []);
-  const ids = [...new Set([...order, ...defaults.map((a) => a.id)])];
+  const ids = [...new Set([...order, ...known.keys()])];
   const list = ids.map((id) => ({ ...known.get(id), hidden: hidden.has(id) }));
   return list.every((a) => a.hidden) ? list.map((a) => ({ ...a, hidden: false })) : list;
 }
@@ -197,3 +222,13 @@ export const STATIONS = [
   { id: 'paradise', name: 'Radio Paradise', tag: 'Eclectic, ohne Werbung', hue: 36, url: 'https://stream.radioparadise.com/aac-320' },
 ];
 export function stationById(id) { return STATIONS.find((s) => s.id === id) || null; }
+
+// ---- YouTube rows on the TV -------------------------------------------------
+export const YT_ROWS = [
+  { id: 'trending', title: 'Angesagt in Deutschland' },
+  { id: '10', title: 'Musik' },
+  { id: '20', title: 'Gaming' },
+  { id: '24', title: 'Unterhaltung' },
+  { id: '17', title: 'Sport' },
+  { id: '25', title: 'Nachrichten' },
+];

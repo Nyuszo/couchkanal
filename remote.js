@@ -10,6 +10,7 @@ const el = {
   sysToggleIcon: $('#sysToggleIcon'), sysToggleLabel: $('#sysToggleLabel'), muteBtn: $('#muteBtn'), muteIcon: $('#muteIcon'), muteLabel: $('#muteLabel'),
   volumeRow: $('#volumeRow'), volume: $('#volume'),
   panels: { home: $('#panelHome'), youtube: $('#panelYoutube'), twitch: $('#panelTwitch'), radio: $('#panelRadio'), clock: $('#panelClock') },
+  ytDial: $('#ytDial'), ytBrowseHint: $('#ytBrowseHint'), scrubWrap: document.querySelector('#panelYoutube .scrub'), transport: document.querySelector('#panelYoutube .transport'), addLauncher: $('#addLauncher'),
   hero: $('#hero'), nowCard: $('#nowCard'), nowGlow: $('#nowGlow'), nowThumb: $('#nowThumb'), nowTitle: $('#nowTitle'), nowChannel: $('#nowChannel'), emptyTitle: $('#emptyTitle'), emptyText: $('#emptyText'),
   scrub: $('#scrub'), tPos: $('#tPos'), tDur: $('#tDur'),
   playBtn: $('#playBtn'), playIcon: $('#playIcon'),
@@ -21,7 +22,7 @@ const el = {
   settings: $('#settings'), appsConfig: $('#appsConfig'), applyApps: $('#applyApps'), apiKeyInput: $('#apiKeyInput'), saveKey: $('#saveKey'), keyStatus: $('#keyStatus'), tvCode: $('#tvCode'), unpair: $('#unpair'),
   toast: $('#toast'),
 };
-const CHIP_COLORS = { youtube: '#ff0000', twitch: '#a970ff', radio: '#ffb454', clock: '#8f9bff' };
+const CHIP_COLORS = { youtube: '#ff0000', twitch: '#a970ff', radio: '#ffb454', clock: '#8f9bff', netflix: '#e50914', prime: '#00a8e1', disney: '#6b8cff', appletv: '#c7c7cc', spotify: '#1ed760' };
 
 const LS = { code: 'couchkanal.remote.code', key: 'couchkanal.apikey', twFavs: 'couchkanal.twitch.favs' };
 const store = {
@@ -53,7 +54,7 @@ function connect(c) {
   el.pairError.hidden = true;
   setConn('busy', 'Verbinde'); el.pairBtn.disabled = true;
   if (!peer || peer.destroyed) {
-    peer = new Peer({ debug: 1 });
+    peer = new Peer({ debug: 0 });
     peer.on('open', dial);
     peer.on('error', onPeerError);
     peer.on('disconnected', () => { if (wantConnected && !peer.destroyed) after('peerReconnect', 2000, () => peer.reconnect()); });
@@ -72,6 +73,7 @@ function dial() {
     store.set(LS.code, code); el.pairBtn.disabled = false;
     setView('control'); setConn('ok', 'Verbunden'); el.tvCode.textContent = code;
     send({ t: 'hello', name: 'Handy' });
+    if (apiKey) send({ t: 'cmd', cmd: 'apikey', key: apiKey });
     toast('Mit dem Fernseher verbunden');
   });
   c.on('data', onData);
@@ -123,7 +125,7 @@ function mediaPlaying() {
   if (tv.media === 'radio') return !!tv.radio?.playing;
   return false;
 }
-let lastPanel = '', lastPlayIcon = '';
+let lastPanel = '', lastPlayIcon = '', lastLaunched = '', lastYtError = '';
 function render() {
   if (!tv) return;
   setConn('ok', 'Verbunden');
@@ -151,6 +153,12 @@ function render() {
   if (!hw && document.activeElement !== el.volume) { el.volume.value = tv.volume; el.volume.style.setProperty('--pct', tv.volume + '%'); }
 
   if (!tv.booted) showNotice('Der Fernseher ist noch nicht gestartet: einmal auf das iPad tippen.');
+  if (tv.launched && tv.launched !== lastLaunched) { lastLaunched = tv.launched; showNotice(`${tv.launched} läuft jetzt auf dem iPad. Zurück zu Couchkanal: am iPad zum Home-Bildschirm, oder mit Apples Fernsteuerung die Home-Taste.`); }
+  if (!tv.launched) lastLaunched = '';
+  const browsing = app === 'youtube' && tv.yt && tv.yt.view === 'browse';
+  el.ytDial.hidden = !browsing; el.ytBrowseHint.hidden = !browsing;
+  el.scrubWrap.hidden = browsing; el.transport.hidden = browsing;
+  if (tv.yt && tv.yt.error && tv.yt.error !== lastYtError) { lastYtError = tv.yt.error; showNotice('Fernseher: ' + tv.yt.error); }
 
   renderYoutube(playing);
   renderTwitch();
@@ -159,7 +167,7 @@ function render() {
 }
 function renderStrip(app) {
   const items = [{ id: 'home', name: 'Start' }, ...(tv.apps || APPS).filter((a) => !a.hidden)];
-  const key = items.map((a) => a.id).join(',') + '|' + app + '|' + tv.media;
+  const key = items.map((a) => a.id + ':' + a.name).join(',') + '|' + app + '|' + tv.media;
   if (el.appstrip.dataset.key === key) return;
   el.appstrip.dataset.key = key;
   el.appstrip.innerHTML = '';
@@ -167,7 +175,8 @@ function renderStrip(app) {
     const b = document.createElement('button');
     b.className = 'app-chip' + (a.id === app ? ' current' : '') + (tv.media === a.id ? ' live' : '');
     b.style.setProperty('--chip', a.id === 'home' ? 'var(--paper-dim)' : CHIP_COLORS[a.id] || 'var(--paper-dim)');
-    b.innerHTML = `<svg class="icon"><use href="${a.id === 'home' ? '#i-home' : '#l-' + a.id}"/></svg><span></span><span class="live-dot"></span>`;
+    const icon = a.id === 'home' ? '#i-home' : (a.kind === 'launch' ? '#i-open' : '#l-' + a.id);
+    b.innerHTML = `<svg class="icon"><use href="${icon}"/></svg><span></span><span class="live-dot"></span>`;
     b.querySelector('span').textContent = a.name;
     b.addEventListener('click', () => { a.id === 'home' ? cmd('home') : cmd('open', { app: a.id }); });
     el.appstrip.appendChild(b);
@@ -370,6 +379,7 @@ async function runSearch(text) {
   try {
     if (p.kind === 'video') { setHint('Lese den Link', 'busy'); const v = await describeVideo(p.id, p.start); renderResults([v], 'Gefunden. Antippen spielt es sofort, das Plus hängt es an.'); return; }
     if (!apiKey) { el.results.innerHTML = ''; hintNoKey(p.q); return; }
+    send({ t: 'cmd', cmd: 'search', q: p.q });
     setHint(`Suche nach „${p.q}“`, 'busy');
     const list = await searchYouTube(p.q, apiKey);
     renderResults(list, list.length ? `${list.length} Treffer für „${p.q}“` : `Nichts gefunden für „${p.q}“`);
@@ -382,9 +392,21 @@ function renderAppsConfig() {
   el.appsConfig.innerHTML = '';
   appsDraft.forEach((a, i) => {
     const li = document.createElement('li');
+    const launch = a.kind === 'launch';
+    li.className = launch ? 'launch' : '';
     li.style.setProperty('--chip', CHIP_COLORS[a.id] || 'var(--paper-dim)');
-    li.innerHTML = `<svg class="icon"><use href="#l-${a.id}"/></svg><span class="name${a.hidden ? ' off' : ''}"></span><span class="mini-group"></span><button type="button" class="switch${a.hidden ? '' : ' on'}" role="switch" aria-checked="${!a.hidden}" aria-label="Anzeigen"></button>`;
-    li.querySelector('.name').textContent = a.name;
+    const icon = launch ? '#i-open' : '#l-' + a.id;
+    li.innerHTML = `<svg class="icon"><use href="${icon}"/></svg><span class="fields"></span><span class="mini-group"></span><button type="button" class="switch${a.hidden ? '' : ' on'}" role="switch" aria-checked="${!a.hidden}" aria-label="Anzeigen"></button>`;
+    const f = li.querySelector('.fields');
+    if (launch) {
+      const n = document.createElement('input'); n.value = a.name; n.placeholder = 'Name'; n.setAttribute('aria-label', 'Name'); n.autocapitalize = 'words';
+      const u = document.createElement('input'); u.value = a.url || ''; u.placeholder = 'Adresse, z. B. nflx://'; u.className = 'url'; u.setAttribute('aria-label', 'Startadresse'); u.autocapitalize = 'off'; u.spellcheck = false;
+      n.addEventListener('input', () => { a.name = n.value; });
+      u.addEventListener('input', () => { a.url = u.value; });
+      f.append(n, u);
+    } else {
+      const n = document.createElement('span'); n.className = 'name' + (a.hidden ? ' off' : ''); n.textContent = a.name; f.appendChild(n);
+    }
     const g = li.querySelector('.mini-group'); g.style.display = 'inline-flex'; g.style.gap = '4px';
     const up = document.createElement('button'); up.type = 'button'; up.className = 'mini'; up.innerHTML = '<svg class="icon"><use href="#i-up"/></svg>'; up.disabled = i === 0; up.setAttribute('aria-label', 'Nach oben');
     const dn = document.createElement('button'); dn.type = 'button'; dn.className = 'mini'; dn.innerHTML = '<svg class="icon"><use href="#i-down"/></svg>'; dn.disabled = i === appsDraft.length - 1; dn.setAttribute('aria-label', 'Nach unten');
@@ -396,7 +418,7 @@ function renderAppsConfig() {
   });
 }
 function openSettings() {
-  appsDraft = (tv?.apps || APPS.map((a) => ({ ...a, hidden: false }))).map((a) => ({ ...a }));
+  appsDraft = (tv?.apps || APPS.map((a) => ({ ...a, hidden: false }))).map((a) => ({ ...a, kind: a.kind || 'app', url: a.url || '' }));
   renderAppsConfig();
   el.apiKeyInput.value = apiKey;
   el.keyStatus.textContent = apiKey ? 'Ein Schlüssel ist gespeichert. Die Suche ist aktiv.' : 'Noch kein Schlüssel gespeichert.';
@@ -406,16 +428,23 @@ function openSettings() {
 el.settingsBtn.addEventListener('click', () => { buzz(); openSettings(); });
 el.applyApps.addEventListener('click', () => {
   if (appsDraft.every((a) => a.hidden)) { toast('Mindestens eine App bleibt sichtbar'); return; }
-  cmd('apps', { order: appsDraft.map((a) => a.id), hidden: appsDraft.filter((a) => a.hidden).map((a) => a.id) });
+  const launchers = appsDraft.filter((a) => a.kind === 'launch' && String(a.name).trim() && String(a.url).trim()).map((a) => ({ id: a.id, name: a.name, url: a.url }));
+  cmd('apps', { order: appsDraft.map((a) => a.id), hidden: appsDraft.filter((a) => a.hidden).map((a) => a.id), launchers });
   toast('An den Fernseher geschickt');
 });
 el.saveKey.addEventListener('click', () => {
   apiKey = el.apiKeyInput.value.trim(); store.set(LS.key, apiKey || null);
+  send({ t: 'cmd', cmd: 'apikey', key: apiKey });
   el.keyStatus.textContent = apiKey ? 'Gespeichert. Die Suche ist aktiv.' : 'Schlüssel entfernt. Links funktionieren weiterhin.';
   if (!apiKey) hintNoKey(''); else setHint('Suche bereit.', '');
   toast(apiKey ? 'Suchschlüssel gespeichert' : 'Suchschlüssel entfernt');
 });
 el.unpair.addEventListener('click', () => { el.settings.close(); disconnect(); });
+el.addLauncher.addEventListener('click', () => {
+  appsDraft.push({ id: 'custom-' + Date.now().toString(36), name: '', url: '', kind: 'launch', hidden: false });
+  renderAppsConfig();
+  const inputs = el.appsConfig.querySelectorAll('li:last-child input'); if (inputs[0]) inputs[0].focus();
+});
 
 // ---- pairing boxes --------------------------------------------------------------------
 function renderBoxes() {
@@ -456,7 +485,7 @@ document.querySelectorAll('[data-cmd]').forEach((b) => {
   });
 });
 document.querySelectorAll('.dial-btn').forEach((b) => b.addEventListener('click', () => cmd('nav', { dir: b.dataset.dir })));
-document.getElementById('dialOk').addEventListener('click', () => cmd('select'));
+document.querySelectorAll('.dial-ok').forEach((b) => b.addEventListener('click', () => cmd('select')));
 document.addEventListener('keydown', (e) => {
   if (root.dataset.view !== 'control' || e.target.matches('input, textarea')) return;
   const map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
